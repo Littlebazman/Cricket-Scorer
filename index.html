@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Touch Cricket Scorer - Reset Match Innings</title>
+<title>Martin's Cricket Scorer</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -136,7 +136,7 @@
 <meta name="theme-color" content="#111827" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Cricket Scorer" />
+<meta name="apple-mobile-web-app-title" content="Martin's Cricket Scorer" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -145,7 +145,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>reset controls</span></h1>
+    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>reset controls</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -1518,7 +1518,7 @@ function renderScorebook(){
   const totalExtrasVal = totalExtras();
   heading.textContent = `${state.team || "Batting side"} innings`;
   document.getElementById("scorebookResultLine").textContent = `Score: ${state.score}/${state.wickets} from ${oversText(state.legalBalls)} overs  |  Run rate: ${rr()}`;
-  document.getElementById("scorebookMeta").innerHTML = `Generated: ${new Date().toLocaleString()}<br>Scorer: Touch Cricket Scorer`;
+  document.getElementById("scorebookMeta").innerHTML = `Generated: ${new Date().toLocaleString()}<br>Scorer: Martin's Cricket Scorer`;
 
   document.getElementById("scorebookBatting").innerHTML =
     `<tr><th>Batter</th><th>How out</th><th>Bowler / fielder</th><th>R</th><th>B</th><th>Rate</th><th>4s</th><th>6s</th></tr>` +

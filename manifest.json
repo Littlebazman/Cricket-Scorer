@@ -1,7 +1,7 @@
 {
-  "name": "Touch Cricket Scorer",
-  "short_name": "Cricket Scorer",
-  "description": "A touch-friendly cricket scoring app for club matches.",
+  "name": "Martin's Cricket Scorer",
+  "short_name": "MCS",
+  "description": "Martin's Cricket Scorer - a touch-friendly cricket scoring app for club matches.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
