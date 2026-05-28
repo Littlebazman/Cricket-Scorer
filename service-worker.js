@@ -1,4 +1,4 @@
-const CACHE_NAME = "touch-cricket-scorer-v6-reset-controls";
+const CACHE_NAME = "martins-cricket-scorer-v8-name-icon";
 const ASSETS = [
   "./",
   "./index.html",

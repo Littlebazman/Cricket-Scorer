@@ -2,7 +2,7 @@
   "name": "Martin's Cricket Scorer",
   "short_name": "MCS",
   "description": "Martin's Cricket Scorer - a touch-friendly cricket scoring app for club matches.",
-  "start_url": "./index.html",
+  "start_url": "./index.html?v=martins-1",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f5f7fb",
@@ -21,5 +21,6 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "id": "/Cricket-Scorer/"
 }
