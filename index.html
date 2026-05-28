@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Touch Cricket Scorer - Correct Last Ball</title>
+<title>Touch Cricket Scorer - Edit Any Ball</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -91,6 +91,8 @@
   .tally-label{display:inline-flex;align-items:center;font-size:11px;font-weight:900;color:#374151;padding:0 5px}
   .auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .archive-grid{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end}
+  .edit-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  @media (max-width:900px){.edit-grid{grid-template-columns:1fr}}
   .match-card{border:1px solid #d1d5db;border-radius:14px;padding:10px;margin:8px 0;background:#fff}
   .match-card-title{font-weight:900;font-size:15px}
   .match-card-meta{font-size:12px;color:#6b7280;margin-top:3px}
@@ -138,7 +140,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>correct last ball</span></h1>
+    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>edit any ball</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -582,6 +584,52 @@
     <div class="row" style="margin-top:10px">
       <button class="utility small" onclick="keepSameBowler()">Keep current bowler</button>
       <button class="small" onclick="closeBowlerPrompt()">Choose later</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="editBallPrompt" class="modal-backdrop no-print">
+  <div class="modal">
+    <h2>Edit ball</h2>
+    <p id="editBallPromptText">Edit this delivery, then recalculate the innings from the ball log.</p>
+    <div class="edit-grid">
+      <div class="field">
+        <label>Event type</label>
+        <select id="editBallType" onchange="toggleEditBallFields()">
+          <option value="run">Bat runs / dot</option>
+          <option value="wide">Wide</option>
+          <option value="noball">No-ball</option>
+          <option value="bye">Bye</option>
+          <option value="legbye">Leg bye</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Total runs added</label>
+        <input id="editBallRuns" type="number" min="0" max="12" value="0">
+      </div>
+      <div class="field" id="editBatRunsField">
+        <label>Runs to batter</label>
+        <input id="editBallBatRuns" type="number" min="0" max="6" value="0">
+      </div>
+      <div class="field">
+        <label>Wicket?</label>
+        <select id="editBallWicket" onchange="toggleEditBallFields()">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </div>
+      <div class="field" id="editDismissalField" style="display:none">
+        <label>Dismissal text</label>
+        <input id="editBallDismissal" placeholder="e.g. Bowled, Caught by Smith">
+      </div>
+    </div>
+    <p class="muted" style="margin-top:10px">
+      This recalculates totals, batter scores, bowler figures, extras, wickets and strike from this log.  For complex wicket corrections, check the incoming batter afterwards.
+    </p>
+    <div class="row" style="margin-top:10px">
+      <button class="success small" onclick="saveEditedBall()">Save edit & recalculate</button>
+      <button class="small" onclick="closeEditBallPrompt()">Cancel</button>
     </div>
   </div>
 </div>
@@ -1051,8 +1099,8 @@ function renderTables(){
     }).join("");
 }
 function renderLog(){
-  document.getElementById("logTable").innerHTML = `<tr><th>#</th><th>Ball</th><th>Bowler</th><th>Batter</th><th>Event</th><th>Runs</th><th>Score</th></tr>` +
-    state.log.map((e,i)=>`<tr><td>${i+1}</td><td>${e.over}</td><td>${e.bowler}</td><td>${e.striker}</td><td>${e.wicket?e.dismissal:e.extraType||"bat"}</td><td>${e.runs}</td><td>${e.score}/${e.wickets}</td></tr>`).join("");
+  document.getElementById("logTable").innerHTML = `<tr><th>#</th><th>Ball</th><th>Bowler</th><th>Batter</th><th>Event</th><th>Runs</th><th>Score</th><th>Edit</th></tr>` +
+    state.log.map((e,i)=>`<tr><td>${i+1}</td><td>${e.over}</td><td>${escapeHtml(e.bowler)}</td><td>${escapeHtml(e.striker)}</td><td>${escapeHtml(e.wicket?e.dismissal:e.extraType||"bat")}</td><td>${e.runs}</td><td>${e.score}/${e.wickets}</td><td><button class="tiny utility" onclick="openEditBall(${i})">Edit</button></td></tr>`).join("");
 }
 function renderTally(){
   const tally = document.getElementById("tally");
@@ -1508,6 +1556,270 @@ function useEstimatedResource(){
   calculateDls();
 }
 
+
+let editBallIndex = null;
+
+function openEditBall(index){
+  if(!state.log || !state.log[index]) return alert("Could not find that ball.");
+  editBallIndex = index;
+  const e = state.log[index];
+
+  document.getElementById("editBallPromptText").textContent =
+    `Editing ball ${e.over}: ${e.bowler} to ${e.striker}.`;
+
+  document.getElementById("editBallType").value = e.type || (e.extraType || "run");
+  document.getElementById("editBallRuns").value = Number(e.runs || 0);
+  document.getElementById("editBallBatRuns").value = Number(e.batRuns || 0);
+  document.getElementById("editBallWicket").value = e.wicket ? "true" : "false";
+  document.getElementById("editBallDismissal").value = e.dismissal || "";
+
+  toggleEditBallFields();
+  const box = document.getElementById("editBallPrompt");
+  if(box) box.style.display = "flex";
+}
+
+function closeEditBallPrompt(){
+  const box = document.getElementById("editBallPrompt");
+  if(box) box.style.display = "none";
+  editBallIndex = null;
+}
+
+function toggleEditBallFields(){
+  const type = document.getElementById("editBallType").value;
+  const wicket = document.getElementById("editBallWicket").value === "true";
+  const batRunsField = document.getElementById("editBatRunsField");
+  const dismissalField = document.getElementById("editDismissalField");
+
+  if(batRunsField) batRunsField.style.display = (type === "run" || type === "noball") ? "grid" : "none";
+  if(dismissalField) dismissalField.style.display = wicket ? "grid" : "none";
+
+  // Sensible defaults when type changes
+  if(type === "wide" && Number(document.getElementById("editBallRuns").value) === 0){
+    document.getElementById("editBallRuns").value = 1;
+  }
+  if(type === "noball" && Number(document.getElementById("editBallRuns").value) === 0){
+    document.getElementById("editBallRuns").value = 1;
+  }
+}
+
+function saveEditedBall(){
+  if(editBallIndex == null || !state.log || !state.log[editBallIndex]) return;
+
+  const old = state.log[editBallIndex];
+  const type = document.getElementById("editBallType").value;
+  const runs = Math.max(0, Number(document.getElementById("editBallRuns").value) || 0);
+  const batRunsInput = Math.max(0, Number(document.getElementById("editBallBatRuns").value) || 0);
+  const wicket = document.getElementById("editBallWicket").value === "true";
+  const dismissal = wicket ? (document.getElementById("editBallDismissal").value.trim() || "Wicket") : "";
+
+  let batRuns = 0;
+  let extraType = "";
+  let extraRuns = 0;
+
+  if(type === "run"){
+    batRuns = runs;
+  } else if(type === "wide"){
+    extraType = "wide";
+    extraRuns = runs;
+  } else if(type === "noball"){
+    extraType = "noball";
+    batRuns = batRunsInput;
+    extraRuns = Math.max(1, runs - batRuns);
+  } else if(type === "bye"){
+    extraType = "bye";
+    extraRuns = runs;
+  } else if(type === "legbye"){
+    extraType = "legbye";
+    extraRuns = runs;
+  }
+
+  state.log[editBallIndex] = {
+    ...old,
+    type,
+    runs,
+    batRuns,
+    extraType,
+    extraRuns,
+    wicket,
+    dismissal,
+    score: 0,
+    wickets: 0
+  };
+
+  recalculateFromBallLog();
+  closeEditBallPrompt();
+  showTab("log");
+  alert("Ball edited and innings recalculated.");
+}
+
+function initialPlayersFromLog(log){
+  const players = [];
+  function add(p){
+    if(p && !players.includes(p)) players.push(p);
+  }
+  if(log.length){
+    add(log[0].striker);
+    add(log[0].nonStriker);
+  }
+  log.forEach(e => {
+    add(e.striker);
+    add(e.nonStriker);
+  });
+  if(state.players){
+    state.players.forEach(add);
+  }
+  return players.length ? players : ["Batter 1", "Batter 2"];
+}
+
+function initialBowlersFromLog(log){
+  const bowlers = [];
+  function add(b){
+    if(b && !bowlers.includes(b)) bowlers.push(b);
+  }
+  log.forEach(e => add(e.bowler));
+  if(state.bowlers) state.bowlers.forEach(add);
+  return bowlers.length ? bowlers : ["Bowler 1"];
+}
+
+function recalculateFromBallLog(){
+  const log = state.log ? JSON.parse(JSON.stringify(state.log)) : [];
+  const oldMaxOvers = state.maxOvers || 35;
+  const oldMaxWickets = state.maxWickets || 10;
+  const oldTeam = state.team || "Practice XI";
+  const oldStartDone = state.startPromptDone;
+
+  const players = initialPlayersFromLog(log);
+  const bowlers = initialBowlersFromLog(log);
+
+  const newBat = {};
+  players.forEach(p => newBat[p] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""});
+  const newBowl = {};
+  bowlers.forEach(b => newBowl[b] = {balls:0,runs:0,wkts:0,wides:0,noballs:0});
+
+  state.score = 0;
+  state.wickets = 0;
+  state.legalBalls = 0;
+  state.extras = {wides:0,noballs:0,byes:0,legbyes:0};
+  state.players = players;
+  state.bowlers = bowlers;
+  state.bat = newBat;
+  state.bowl = newBowl;
+  state.maxOvers = oldMaxOvers;
+  state.maxWickets = oldMaxWickets;
+  state.team = oldTeam;
+  state.startPromptDone = oldStartDone;
+  state.inningsComplete = false;
+  state.promptBowlerDue = false;
+  state.history = [];
+
+  if(log.length){
+    state.striker = log[0].striker;
+    state.nonStriker = log[0].nonStriker;
+    state.bowler = log[0].bowler;
+  }
+
+  log.forEach((e, idx) => {
+    if(!state.bat[e.striker]) state.bat[e.striker] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""};
+    if(!state.bat[e.nonStriker]) state.bat[e.nonStriker] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""};
+    if(!state.bowl[e.bowler]) state.bowl[e.bowler] = {balls:0,runs:0,wkts:0,wides:0,noballs:0};
+    if(!state.players.includes(e.striker)) state.players.push(e.striker);
+    if(!state.players.includes(e.nonStriker)) state.players.push(e.nonStriker);
+    if(!state.bowlers.includes(e.bowler)) state.bowlers.push(e.bowler);
+
+    const legal = !(e.type === "wide" || e.type === "noball");
+    const striker = state.bat[e.striker];
+    const bowler = state.bowl[e.bowler];
+    const runs = Number(e.runs || 0);
+    const batRuns = Number(e.batRuns || 0);
+    const extraRuns = Number(e.extraRuns || 0);
+
+    // Refresh stored pre-ball names/ball label from the current replay position where possible
+    e.striker = state.striker || e.striker;
+    e.nonStriker = state.nonStriker || e.nonStriker;
+    e.bowler = e.bowler || state.bowler;
+    e.over = overNotationForReplay(legal);
+
+    if(e.type === "run"){
+      striker.runs += batRuns;
+      striker.balls += 1;
+      if(batRuns === 4) striker.fours += 1;
+      if(batRuns === 6) striker.sixes += 1;
+      bowler.runs += batRuns;
+    } else if(e.type === "wide"){
+      state.extras.wides += extraRuns;
+      bowler.runs += extraRuns;
+      bowler.wides += extraRuns;
+    } else if(e.type === "noball"){
+      state.extras.noballs += extraRuns;
+      striker.runs += batRuns;
+      if(batRuns === 4) striker.fours += 1;
+      if(batRuns === 6) striker.sixes += 1;
+      bowler.runs += runs;
+      bowler.noballs += extraRuns;
+    } else if(e.type === "bye"){
+      state.extras.byes += extraRuns;
+      striker.balls += 1;
+    } else if(e.type === "legbye"){
+      state.extras.legbyes += extraRuns;
+      striker.balls += 1;
+    }
+
+    state.score += runs;
+
+    if(legal){
+      state.legalBalls += 1;
+      bowler.balls += 1;
+    }
+
+    if(e.wicket){
+      state.wickets += 1;
+      striker.out = true;
+      striker.dismissal = e.dismissal || "Wicket";
+      if(!/run out|retired/i.test(e.dismissal || "")){
+        bowler.wkts += 1;
+      }
+    }
+
+    e.score = state.score;
+    e.wickets = state.wickets;
+
+    const oddRunSwap = !e.wicket && shouldSwapStrike(e.type, batRuns, extraRuns);
+    const overEnded = legal && state.legalBalls % 6 === 0;
+
+    if(e.wicket){
+      // Try to infer the next striker from the next log entry if there is one.
+      const next = log[idx + 1];
+      if(next && next.striker && next.striker !== state.nonStriker){
+        state.striker = next.striker;
+        if(!state.bat[state.striker]) {
+          state.bat[state.striker] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""};
+          state.players.push(state.striker);
+        }
+      }
+    } else if(oddRunSwap){
+      [state.striker, state.nonStriker] = [state.nonStriker, state.striker];
+    }
+
+    if(overEnded){
+      [state.striker, state.nonStriker] = [state.nonStriker, state.striker];
+    }
+
+    if(state.wickets >= (typeof allOutWicketLimit === "function" ? allOutWicketLimit() : 10) || state.legalBalls >= state.maxOvers * 6){
+      state.inningsComplete = true;
+    }
+  });
+
+  state.log = log;
+  saveNow();
+  render();
+}
+
+function overNotationForReplay(legal){
+  const balls = legal ? state.legalBalls + 1 : state.legalBalls + 1;
+  const over = Math.floor((balls - 1) / 6);
+  const ball = ((balls - 1) % 6) + 1;
+  return `${over}.${ball}`;
+}
 function isLogEntryLegal(e){
   return !(e.type === "wide" || e.type === "noball");
 }
