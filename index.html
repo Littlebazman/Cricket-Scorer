@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Touch Cricket Scorer - Visible Edit Buttons</title>
+<title>Touch Cricket Scorer - Second Innings Target</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -96,6 +96,11 @@
   .match-card{border:1px solid #d1d5db;border-radius:14px;padding:10px;margin:8px 0;background:#fff}
   .match-card-title{font-weight:900;font-size:15px}
   .match-card-meta{font-size:12px;color:#6b7280;margin-top:3px}
+  .innings-target-panel{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  .target-good{background:#dcfce7!important;color:#166534!important;font-weight:900}
+  .target-warn{background:#fef3c7!important;color:#92400e!important;font-weight:900}
+  .target-bad{background:#fee2e2!important;color:#991b1b!important;font-weight:900}
+  @media(max-width:900px){.innings-target-panel{grid-template-columns:repeat(2,1fr)}}
   @media (max-width:900px){.auth-grid,.archive-grid{grid-template-columns:1fr}}
   .dls-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
   .dls-result{font-size:34px;font-weight:900;margin:4px 0}
@@ -140,7 +145,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>visible edit buttons</span></h1>
+    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>second innings</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -151,6 +156,30 @@
     <div class="tile"><div class="label">Run rate</div><div class="value" id="rrBig">0.00</div><div class="sub" id="ballsBig">0 legal balls</div></div>
     <div class="tile"><div class="label">Striker</div><div class="value" id="strikerBig">Batter 1</div><div class="sub" id="strikerSub">0* (0)</div></div>
     <div class="tile"><div class="label">Bowler</div><div class="value" id="bowlerBig">Bowler 1</div><div class="sub" id="bowlerSub">0.0-0-0-0</div></div>
+  </div>
+
+
+  <div class="innings-target-panel" id="inningsTargetPanel" style="display:none">
+    <div class="tile">
+      <div class="label">Innings</div>
+      <div class="value" id="inningsNumberBig">1st</div>
+      <div class="sub" id="inningsSub">First innings</div>
+    </div>
+    <div class="tile">
+      <div class="label">Target</div>
+      <div class="value" id="targetBig">-</div>
+      <div class="sub" id="targetSub">No target yet</div>
+    </div>
+    <div class="tile">
+      <div class="label">Chase</div>
+      <div class="value" id="requiredBig">-</div>
+      <div class="sub" id="requiredSub">Runs required</div>
+    </div>
+    <div class="tile">
+      <div class="label">Result status</div>
+      <div class="value" id="resultBig" style="font-size:24px">In play</div>
+      <div class="sub" id="resultSub">Match ongoing</div>
+    </div>
   </div>
 
   <div class="tabs no-print">
@@ -246,7 +275,8 @@
         <div class="scoreline">
           <strong>Batting:</strong> <span id="batPair"></span><br>
           <strong>Bowling:</strong> <span id="bowlerLine"></span><br>
-          <strong>Extras:</strong> <span id="extrasLine"></span>
+          <strong>Extras:</strong> <span id="extrasLine"></span><br>
+          <strong>Target:</strong> <span id="targetLine">No target</span>
         </div>
         <hr style="border:0;border-top:1px solid #e5e7eb;margin:12px 0">
         <div>
@@ -544,6 +574,18 @@
       <button class="success" onclick="applySetup()" style="margin-top:12px">Apply setup</button>
     </div>
 
+
+    <div class="panel" style="margin-top:12px">
+      <div class="section-title"><h2>Innings / target</h2></div>
+      <p class="muted">Use this after the first innings is complete.  It stores the first innings summary, resets the scorer, and sets the second-innings target automatically.</p>
+      <div class="row">
+        <button class="success small" onclick="startSecondInnings()">Start second innings from current score</button>
+        <button class="utility small" onclick="setManualTarget()">Set / edit manual target</button>
+        <button class="danger small" onclick="clearTargetOnly()">Clear target</button>
+      </div>
+      <p class="muted" id="inningsSetupStatus" style="margin-top:8px">Currently scoring first innings.</p>
+    </div>
+
     <div class="panel" style="margin-top:12px">
       <div class="section-title"><h2>Recovery and backup</h2></div>
       <p>This file autosaves after every tap in the browser on this device.  If the page closes or crashes, reopen the same file and it should restore the innings.</p>
@@ -821,7 +863,7 @@ function scoreBall(ev){
     }
   }
 
-  if(state.wickets >= allOutWicketLimit() || state.legalBalls >= state.maxOvers*6){
+  if(state.wickets >= allOutWicketLimit() || state.legalBalls >= state.maxOvers*6 || (state.inningsNumber === 2 && state.target && state.score >= state.target)){
     state.inningsComplete = true;
     state.promptBowlerDue = false;
   }
@@ -1028,6 +1070,7 @@ function bowlerFig(b){
 }
 function render(){
   ensureObjects();
+  if(typeof ensureInningsFields === "function") ensureInningsFields();
   document.getElementById("scoreBig").textContent = `${state.score}/${state.wickets}`;
   document.getElementById("oversBig").textContent = `${oversText(state.legalBalls)} overs`;
   document.getElementById("rrBig").textContent = rr();
@@ -1038,14 +1081,14 @@ function render(){
   document.getElementById("bowlerBig").textContent = state.bowler;
   document.getElementById("bowlerSub").textContent = bowlerFig(state.bowler);
   document.getElementById("inningsStatus").textContent = state.inningsComplete
-    ? (state.wickets >= allOutWicketLimit() ? "All out" : "Innings complete")
+    ? (state.inningsNumber === 2 && state.target && state.score >= state.target ? "Target reached" : (state.wickets >= allOutWicketLimit() ? "All out" : "Innings complete"))
     : "In progress";
   document.getElementById("overPill").textContent = `Over ${Math.floor(state.legalBalls/6)+1}`;
   const ns = state.bat[state.nonStriker];
   document.getElementById("batPair").innerHTML = `<strong>${state.striker}</strong> ${s.runs}* (${s.balls}) &nbsp; | &nbsp; ${state.nonStriker} ${ns.runs}* (${ns.balls})`;
   document.getElementById("bowlerLine").textContent = `${state.bowler} ${bowlerFig(state.bowler)}`;
   document.getElementById("extrasLine").textContent = `${totalExtras()} (Wd ${state.extras.wides}, NB ${state.extras.noballs}, B ${state.extras.byes}, LB ${state.extras.legbyes})`;
-  renderThisOver(); renderTables(); renderLog(); renderTally(); renderSelects(); renderScorebook(); calculateDls();
+  renderThisOver(); renderTables(); renderLog(); renderTally(); renderSelects(); renderScorebook(); calculateDls(); if(typeof renderInningsInfo === "function") renderInningsInfo();
   document.getElementById("teamName").value = state.team;
   document.getElementById("maxOvers").value = state.maxOvers;
   document.getElementById("playerCount").value = state.players.length;
@@ -1970,6 +2013,192 @@ function reverseLastBall(){
   state.promptBowlerDue = false;
   if(typeof closeBowlerPrompt === "function") closeBowlerPrompt();
 
+  saveNow();
+  render();
+}
+
+function ensureInningsFields(){
+  if(state.inningsNumber == null) state.inningsNumber = 1;
+  if(state.target == null) state.target = null;
+  if(state.firstInnings == null) state.firstInnings = null;
+  if(state.matchResult == null) state.matchResult = "";
+}
+function inningsOrdinal(n){
+  return n === 2 ? "2nd" : "1st";
+}
+function ballsRemaining(){
+  return Math.max(0, (state.maxOvers || 35) * 6 - (state.legalBalls || 0));
+}
+function wicketsRemaining(){
+  const limit = typeof allOutWicketLimit === "function" ? allOutWicketLimit() : 10;
+  return Math.max(0, limit - (state.wickets || 0));
+}
+function renderInningsInfo(){
+  ensureInningsFields();
+  const panel = document.getElementById("inningsTargetPanel");
+  const setupStatus = document.getElementById("inningsSetupStatus");
+  const targetLine = document.getElementById("targetLine");
+
+  if(panel) panel.style.display = "grid";
+
+  const inningsNo = document.getElementById("inningsNumberBig");
+  const inningsSub = document.getElementById("inningsSub");
+  if(inningsNo) inningsNo.textContent = inningsOrdinal(state.inningsNumber);
+  if(inningsSub) inningsSub.textContent = state.inningsNumber === 2 ? "Second innings / chase" : "First innings";
+
+  const target = Number(state.target || 0);
+  const hasTarget = state.inningsNumber === 2 && target > 0;
+  const required = hasTarget ? Math.max(0, target - (state.score || 0)) : null;
+  const ballsLeft = ballsRemaining();
+  const wktsLeft = wicketsRemaining();
+
+  const targetBig = document.getElementById("targetBig");
+  const targetSub = document.getElementById("targetSub");
+  const requiredBig = document.getElementById("requiredBig");
+  const requiredSub = document.getElementById("requiredSub");
+  const resultBig = document.getElementById("resultBig");
+  const resultSub = document.getElementById("resultSub");
+
+  if(targetBig) targetBig.textContent = hasTarget ? String(target) : "-";
+  if(targetSub) targetSub.textContent = hasTarget && state.firstInnings ? `First innings: ${state.firstInnings.score}/${state.firstInnings.wickets}` : "No target yet";
+
+  if(requiredBig) requiredBig.textContent = hasTarget ? String(required) : "-";
+  if(requiredSub){
+    requiredSub.textContent = hasTarget
+      ? `${required} needed from ${ballsLeft} balls, ${wktsLeft} wicket${wktsLeft===1?"":"s"} left`
+      : "Runs required";
+  }
+
+  if(targetLine){
+    targetLine.textContent = hasTarget
+      ? `${required} needed from ${ballsLeft} balls to win.  Target ${target}.`
+      : "No target";
+  }
+
+  if(resultBig && resultSub){
+    resultBig.classList.remove("target-good","target-warn","target-bad");
+    if(hasTarget && state.score >= target){
+      const wicketsLost = state.wickets || 0;
+      const wicketsWonBy = Math.max(0, (typeof allOutWicketLimit === "function" ? allOutWicketLimit() : 10) - wicketsLost);
+      resultBig.textContent = "Won";
+      resultBig.classList.add("target-good");
+      resultSub.textContent = `Chasing side won by ${wicketsWonBy} wicket${wicketsWonBy===1?"":"s"}.`;
+    } else if(hasTarget && state.inningsComplete){
+      const margin = target - (state.score || 0);
+      resultBig.textContent = "Lost";
+      resultBig.classList.add("target-bad");
+      resultSub.textContent = `Chasing side short by ${margin} run${margin===1?"":"s"}.`;
+    } else if(hasTarget){
+      resultBig.textContent = required <= 20 ? "Close" : "In play";
+      resultBig.classList.add(required <= 20 ? "target-warn" : "target-good");
+      resultSub.textContent = `Required rate: ${ballsLeft ? ((required / ballsLeft) * 6).toFixed(2) : "-"} rpo.`;
+    } else {
+      resultBig.textContent = "In play";
+      resultSub.textContent = "Match ongoing";
+    }
+  }
+
+  if(setupStatus){
+    if(state.inningsNumber === 2 && hasTarget){
+      setupStatus.textContent = `Second innings.  Target: ${target}.  ${required} required from ${ballsLeft} balls.`;
+    } else if(state.firstInnings){
+      setupStatus.textContent = `First innings saved: ${state.firstInnings.score}/${state.firstInnings.wickets} from ${state.firstInnings.overs}.`;
+    } else {
+      setupStatus.textContent = "Currently scoring first innings.";
+    }
+  }
+}
+function firstInningsSnapshot(){
+  return {
+    score: state.score || 0,
+    wickets: state.wickets || 0,
+    overs: typeof oversText === "function" ? oversText(state.legalBalls || 0) : String(state.legalBalls || 0),
+    legalBalls: state.legalBalls || 0,
+    extras: JSON.parse(JSON.stringify(state.extras || {})),
+    players: JSON.parse(JSON.stringify(state.players || [])),
+    bowlers: JSON.parse(JSON.stringify(state.bowlers || [])),
+    bat: JSON.parse(JSON.stringify(state.bat || {})),
+    bowl: JSON.parse(JSON.stringify(state.bowl || {})),
+    log: JSON.parse(JSON.stringify(state.log || [])),
+    team: state.team || "First innings"
+  };
+}
+function resetScoringForNewInnings(){
+  const players = Array.from({length:11},(_,i)=>`Batter ${i+1}`);
+  const bowlers = Array.from({length:7},(_,i)=>`Bowler ${i+1}`);
+  const bat = {};
+  players.forEach(p=>bat[p]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""});
+  const bowl = {};
+  bowlers.forEach(b=>bowl[b]={balls:0,runs:0,wkts:0,wides:0,noballs:0});
+
+  state.players = players;
+  state.bowlers = bowlers;
+  state.bat = bat;
+  state.bowl = bowl;
+  state.striker = "Batter 1";
+  state.nonStriker = "Batter 2";
+  state.bowler = "Bowler 1";
+  state.nextBatterIndex = 2;
+  state.score = 0;
+  state.wickets = 0;
+  state.legalBalls = 0;
+  state.extras = {wides:0,noballs:0,byes:0,legbyes:0};
+  state.log = [];
+  state.history = [];
+  state.inningsComplete = false;
+  state.promptBowlerDue = false;
+  state.startPromptDone = false;
+  state.matchResult = "";
+}
+function startSecondInnings(){
+  ensureInningsFields();
+  if(state.inningsNumber === 2){
+    alert("You are already in the second innings.");
+    return;
+  }
+  if(!state.score && !(state.log && state.log.length)){
+    alert("There is no first innings score yet.");
+    return;
+  }
+  if(!confirm(`Start second innings?  First innings will be saved as ${state.score}/${state.wickets}.`)) return;
+
+  const first = firstInningsSnapshot();
+  state.firstInnings = first;
+  state.target = first.score + 1;
+  state.inningsNumber = 2;
+  resetScoringForNewInnings();
+
+  // Keep the first innings and target after reset
+  state.firstInnings = first;
+  state.target = first.score + 1;
+  state.inningsNumber = 2;
+  state.team = "Chasing team";
+
+  saveNow();
+  render();
+  showTab("score");
+  alert(`Second innings started.  Target is ${state.target}.`);
+}
+function setManualTarget(){
+  ensureInningsFields();
+  const current = state.target || ((state.firstInnings && state.firstInnings.score) ? state.firstInnings.score + 1 : "");
+  const val = prompt("Enter target for this innings:", current);
+  if(val === null) return;
+  const target = Number(val);
+  if(!target || target < 1){
+    alert("Please enter a valid target.");
+    return;
+  }
+  state.target = target;
+  if(state.inningsNumber !== 2) state.inningsNumber = 2;
+  saveNow();
+  render();
+}
+function clearTargetOnly(){
+  if(!confirm("Clear the target and return to first-innings mode?")) return;
+  state.target = null;
+  state.inningsNumber = 1;
+  state.matchResult = "";
   saveNow();
   render();
 }
