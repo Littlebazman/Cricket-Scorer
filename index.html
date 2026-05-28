@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Touch Cricket Scorer - Account Archive</title>
+<title>Touch Cricket Scorer - Correct Last Ball</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -138,7 +138,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>account archive</span></h1>
+    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>correct last ball</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -234,6 +234,7 @@
           <button class="utility small" onclick="swapStrike()">Swap strike</button>
           <button class="utility small" onclick="changeBowler()">Change bowler</button>
           <button class="utility small" onclick="undo()">Undo last ball</button>
+          <button class="utility small" onclick="openCorrectLastBall()">Correct last ball</button>
           <button class="danger small" onclick="clearMatch()">Reset match</button>
         </div>
       </div>
@@ -499,7 +500,7 @@
 
   <div id="log" class="view">
     <div class="panel">
-      <div class="section-title"><h2>Ball log</h2><button class="small" onclick="exportCSV()">Export CSV</button></div>
+      <div class="section-title"><h2>Ball log</h2><div class="row"><button class="utility small" onclick="openCorrectLastBall()">Correct last ball</button><button class="small" onclick="exportCSV()">Export CSV</button></div></div>
       <table id="logTable"></table>
     </div>
   </div>
@@ -585,9 +586,21 @@
   </div>
 </div>
 
+<div id="correctionPrompt" class="modal-backdrop no-print">
+  <div class="modal">
+    <h2>Correct last ball</h2>
+    <p id="correctionPromptText">This will remove the last recorded ball so you can enter it again correctly.</p>
+    <div class="row" style="margin-top:10px">
+      <button class="danger small" onclick="confirmCorrectLastBall()">Remove last ball</button>
+      <button class="small" onclick="closeCorrectionPrompt()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="footer-actions no-print">
   <button class="dark small" onclick="showTab('score')">Score</button>
   <button class="utility small" onclick="undo()">Undo</button>
+  <button class="utility small" onclick="openCorrectLastBall()">Correct</button>
   <button class="blue small" onclick="showTab('scorebook')">Scorebook</button>
   <button class="blue small" onclick="showTab('dls')">DLS</button>
   <button class="blue small" onclick="showTab('account')">Archive</button>
@@ -1493,6 +1506,125 @@ function useEstimatedResource(){
   const est = estimateDlsResource();
   document.getElementById("dlsR2").value = est.toFixed(1);
   calculateDls();
+}
+
+function isLogEntryLegal(e){
+  return !(e.type === "wide" || e.type === "noball");
+}
+function logEntryDisplay(e){
+  if(!e) return "No ball recorded yet.";
+  const label = scorebookBallSymbol ? scorebookBallSymbol(e) : (e.wicket ? "W" : String(e.runs || 0));
+  return `Last ball: ${e.over} ${e.bowler} to ${e.striker} — ${label}, score ${e.score}/${e.wickets}`;
+}
+function openCorrectLastBall(){
+  if(!state.log || !state.log.length){
+    alert("There is no recorded ball to correct yet.");
+    return;
+  }
+  closePopups();
+  if(typeof closeBowlerPrompt === "function") closeBowlerPrompt();
+  const last = state.log[state.log.length - 1];
+  const text = document.getElementById("correctionPromptText");
+  if(text){
+    text.textContent = `${logEntryDisplay(last)}.  This will remove that delivery and return the match to the state before it was bowled, so you can enter the correct ball again.`;
+  }
+  const box = document.getElementById("correctionPrompt");
+  if(box) box.style.display = "flex";
+}
+function closeCorrectionPrompt(){
+  const box = document.getElementById("correctionPrompt");
+  if(box) box.style.display = "none";
+}
+function confirmCorrectLastBall(){
+  if(!state.log || !state.log.length){
+    closeCorrectionPrompt();
+    return;
+  }
+  if(!confirm("Remove the last recorded ball and re-enter it?")) return;
+  reverseLastBall();
+  closeCorrectionPrompt();
+  showTab("score");
+  alert("Last ball removed.  Enter the correct delivery now.");
+}
+function reverseLastBall(){
+  const e = state.log.pop();
+  if(!e) return;
+
+  // Remove team score and wicket count
+  state.score = Math.max(0, (state.score || 0) - Number(e.runs || 0));
+  if(e.wicket){
+    state.wickets = Math.max(0, (state.wickets || 0) - 1);
+  }
+
+  // Restore pre-ball players/bowler
+  state.striker = e.striker;
+  state.nonStriker = e.nonStriker;
+  state.bowler = e.bowler;
+
+  // Remove legal ball from innings and bowler
+  const legal = isLogEntryLegal(e);
+  if(legal){
+    state.legalBalls = Math.max(0, (state.legalBalls || 0) - 1);
+    if(state.bowl[e.bowler]) state.bowl[e.bowler].balls = Math.max(0, (state.bowl[e.bowler].balls || 0) - 1);
+  }
+
+  // Reverse batting stats
+  if(state.bat[e.striker]){
+    if(e.type === "run"){
+      state.bat[e.striker].runs = Math.max(0, (state.bat[e.striker].runs || 0) - Number(e.batRuns || 0));
+      state.bat[e.striker].balls = Math.max(0, (state.bat[e.striker].balls || 0) - 1);
+      if(Number(e.batRuns || 0) === 4) state.bat[e.striker].fours = Math.max(0, (state.bat[e.striker].fours || 0) - 1);
+      if(Number(e.batRuns || 0) === 6) state.bat[e.striker].sixes = Math.max(0, (state.bat[e.striker].sixes || 0) - 1);
+    } else if(e.type === "noball"){
+      state.bat[e.striker].runs = Math.max(0, (state.bat[e.striker].runs || 0) - Number(e.batRuns || 0));
+      if(Number(e.batRuns || 0) === 4) state.bat[e.striker].fours = Math.max(0, (state.bat[e.striker].fours || 0) - 1);
+      if(Number(e.batRuns || 0) === 6) state.bat[e.striker].sixes = Math.max(0, (state.bat[e.striker].sixes || 0) - 1);
+    } else if(e.type === "bye" || e.type === "legbye"){
+      state.bat[e.striker].balls = Math.max(0, (state.bat[e.striker].balls || 0) - 1);
+    }
+
+    if(e.wicket){
+      state.bat[e.striker].out = false;
+      state.bat[e.striker].dismissal = "";
+    }
+  }
+
+  // Reverse extras
+  if(e.extraType === "wide"){
+    state.extras.wides = Math.max(0, (state.extras.wides || 0) - Number(e.extraRuns || 0));
+  } else if(e.extraType === "noball"){
+    state.extras.noballs = Math.max(0, (state.extras.noballs || 0) - Number(e.extraRuns || 0));
+  } else if(e.extraType === "bye"){
+    state.extras.byes = Math.max(0, (state.extras.byes || 0) - Number(e.extraRuns || 0));
+  } else if(e.extraType === "legbye"){
+    state.extras.legbyes = Math.max(0, (state.extras.legbyes || 0) - Number(e.extraRuns || 0));
+  }
+
+  // Reverse bowler figures
+  if(state.bowl[e.bowler]){
+    let bowlerRunsToRemove = 0;
+    if(e.type === "run"){
+      bowlerRunsToRemove = Number(e.batRuns || 0);
+    } else if(e.type === "wide" || e.type === "noball"){
+      bowlerRunsToRemove = Number(e.runs || 0);
+    }
+    state.bowl[e.bowler].runs = Math.max(0, (state.bowl[e.bowler].runs || 0) - bowlerRunsToRemove);
+
+    if(e.extraType === "wide") state.bowl[e.bowler].wides = Math.max(0, (state.bowl[e.bowler].wides || 0) - Number(e.extraRuns || 0));
+    if(e.extraType === "noball") state.bowl[e.bowler].noballs = Math.max(0, (state.bowl[e.bowler].noballs || 0) - Number(e.extraRuns || 0));
+
+    if(e.wicket && !/run out|retired/i.test(e.dismissal || "")){
+      state.bowl[e.bowler].wkts = Math.max(0, (state.bowl[e.bowler].wkts || 0) - 1);
+    }
+  }
+
+  // If the removed delivery had ended the innings/over prompt, reopen scoring
+  state.inningsComplete = false;
+  state.promptBowlerDue = false;
+  if(typeof closeBowlerPrompt === "function") closeBowlerPrompt();
+
+  saveNow();
+  render();
 }
 function exportCSV(){
   const rows = [["No","Ball","Bowler","Striker","Non-striker","Type","Bat runs","Extra type","Extra runs","Wicket","Dismissal","Score","Wickets"]];
