@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Touch Cricket Scorer - Second Innings Target</title>
+<title>Touch Cricket Scorer - Reset Match Innings</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -145,7 +145,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>second innings</span></h1>
+    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>reset controls</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -266,6 +266,7 @@
           <button class="utility small" onclick="changeBowler()">Change bowler</button>
           <button class="utility small" onclick="undo()">Undo last ball</button>
           <button class="utility small" onclick="openCorrectLastBall()">Correct last ball</button>
+          <button class="danger small" onclick="resetCurrentInnings()">Reset current innings</button>
           <button class="danger small" onclick="clearMatch()">Reset match</button>
         </div>
       </div>
@@ -581,6 +582,7 @@
       <div class="row">
         <button class="success small" onclick="startSecondInnings()">Start second innings from current score</button>
         <button class="utility small" onclick="setManualTarget()">Set / edit manual target</button>
+        <button class="danger small" onclick="resetCurrentInnings()">Reset current innings</button>
         <button class="danger small" onclick="clearTargetOnly()">Clear target</button>
       </div>
       <p class="muted" id="inningsSetupStatus" style="margin-top:8px">Currently scoring first innings.</p>
@@ -1037,8 +1039,59 @@ function clearSavedOnly(){
   localStorage.removeItem(STORAGE_KEY);
   document.getElementById("autosave").textContent = "Autosave cleared";
 }
+
+function resetCurrentInnings(){
+  if(!confirm("Reset the current innings only?  This clears the current innings score, wickets, batters, bowlers, extras and ball log.  Match/target information is kept.")) return;
+
+  const keepFirstInnings = state.firstInnings || null;
+  const keepTarget = state.target || null;
+  const keepInningsNumber = state.inningsNumber || 1;
+  const keepMatchResult = state.matchResult || "";
+  const keepTeam = state.team || "Practice XI";
+  const keepMaxOvers = state.maxOvers || 35;
+  const keepMaxWickets = state.maxWickets || 10;
+
+  const players = Array.from({length:11},(_,i)=>`Batter ${i+1}`);
+  const bowlers = Array.from({length:7},(_,i)=>`Bowler ${i+1}`);
+  const bat = {};
+  players.forEach(p=>bat[p]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""});
+  const bowl = {};
+  bowlers.forEach(b=>bowl[b]={balls:0,runs:0,wkts:0,wides:0,noballs:0});
+
+  state.players = players;
+  state.bowlers = bowlers;
+  state.bat = bat;
+  state.bowl = bowl;
+  state.striker = "Batter 1";
+  state.nonStriker = "Batter 2";
+  state.bowler = "Bowler 1";
+  state.nextBatterIndex = 2;
+  state.score = 0;
+  state.wickets = 0;
+  state.legalBalls = 0;
+  state.extras = {wides:0,noballs:0,byes:0,legbyes:0};
+  state.log = [];
+  state.history = [];
+  state.inningsComplete = false;
+  state.promptBowlerDue = false;
+  state.startPromptDone = false;
+
+  state.firstInnings = keepFirstInnings;
+  state.target = keepTarget;
+  state.inningsNumber = keepInningsNumber;
+  state.matchResult = keepMatchResult;
+  state.team = keepTeam;
+  state.maxOvers = keepMaxOvers;
+  state.maxWickets = keepMaxWickets;
+
+  saveNow();
+  render();
+  showTab("score");
+  alert("Current innings reset.  Match/target information has been kept.");
+}
+
 function clearMatch(){
-  if(!confirm("Reset the whole innings?")) return;
+  if(!confirm("Reset the whole match?  This will clear both innings, target information, current score and local progress on this device.")) return;
   localStorage.removeItem(STORAGE_KEY);
   state = initialState();
   render();
