@@ -1,4 +1,4 @@
-const CACHE_NAME = "touch-cricket-scorer-v2-account-archive";
+const CACHE_NAME = "touch-cricket-scorer-v4-visible-edit";
 const ASSETS = [
   "./",
   "./index.html",

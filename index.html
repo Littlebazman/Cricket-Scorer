@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Touch Cricket Scorer - Edit Any Ball</title>
+<title>Touch Cricket Scorer - Visible Edit Buttons</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -140,7 +140,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>edit any ball</span></h1>
+    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>visible edit buttons</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -503,6 +503,16 @@
   <div id="log" class="view">
     <div class="panel">
       <div class="section-title"><h2>Ball log</h2><div class="row"><button class="utility small" onclick="openCorrectLastBall()">Correct last ball</button><button class="small" onclick="exportCSV()">Export CSV</button></div></div>
+      <div class="panel" style="background:#f9fafb;margin-bottom:10px">
+        <div class="row">
+          <div class="field" style="max-width:180px">
+            <label>Ball number to edit</label>
+            <input id="editBallNumberInput" type="number" min="1" placeholder="e.g. 12">
+          </div>
+          <button class="utility small" onclick="openEditBallFromNumber()">Edit selected ball</button>
+        </div>
+        <p class="muted" style="margin:6px 0 0">You can also use the Edit button beside a ball below.</p>
+      </div>
       <table id="logTable"></table>
     </div>
   </div>
@@ -1099,8 +1109,22 @@ function renderTables(){
     }).join("");
 }
 function renderLog(){
-  document.getElementById("logTable").innerHTML = `<tr><th>#</th><th>Ball</th><th>Bowler</th><th>Batter</th><th>Event</th><th>Runs</th><th>Score</th><th>Edit</th></tr>` +
-    state.log.map((e,i)=>`<tr><td>${i+1}</td><td>${e.over}</td><td>${escapeHtml(e.bowler)}</td><td>${escapeHtml(e.striker)}</td><td>${escapeHtml(e.wicket?e.dismissal:e.extraType||"bat")}</td><td>${e.runs}</td><td>${e.score}/${e.wickets}</td><td><button class="tiny utility" onclick="openEditBall(${i})">Edit</button></td></tr>`).join("");
+  const table = document.getElementById("logTable");
+  if(!table) return;
+  table.innerHTML = `<tr><th>#</th><th>Ball</th><th>Bowler</th><th>Batter</th><th>Event</th><th>Runs</th><th>Score</th><th>Edit</th></tr>` +
+    (state.log || []).map((e,i)=>{
+      const eventText = e.wicket ? (e.dismissal || "Wicket") : (e.extraType || "bat");
+      return `<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(e.over || "")}</td>
+        <td>${escapeHtml(e.bowler || "")}</td>
+        <td>${escapeHtml(e.striker || "")}</td>
+        <td>${escapeHtml(eventText)}</td>
+        <td>${Number(e.runs || 0)}</td>
+        <td>${Number(e.score || 0)}/${Number(e.wickets || 0)}</td>
+        <td><button class="tiny utility" onclick="openEditBall(${i})">Edit</button></td>
+      </tr>`;
+    }).join("");
 }
 function renderTally(){
   const tally = document.getElementById("tally");
@@ -1558,6 +1582,17 @@ function useEstimatedResource(){
 
 
 let editBallIndex = null;
+
+
+function openEditBallFromNumber(){
+  const input = document.getElementById("editBallNumberInput");
+  const n = input ? Number(input.value) : 0;
+  if(!n || n < 1 || n > (state.log ? state.log.length : 0)){
+    alert("Enter a valid ball number from the Ball Log.");
+    return;
+  }
+  openEditBall(n - 1);
+}
 
 function openEditBall(index){
   if(!state.log || !state.log[index]) return alert("Could not find that ball.");
