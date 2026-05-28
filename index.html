@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Touch Cricket Scorer - bowler economy and grouped tally</title>
+<title>Touch Cricket Scorer - Account Archive</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -89,6 +89,12 @@
   .tally-dot.extra-dot{background:#fed7aa;color:#9a3412}
   .tally-dot.wicket-dot{background:#fecaca;color:#991b1b}
   .tally-label{display:inline-flex;align-items:center;font-size:11px;font-weight:900;color:#374151;padding:0 5px}
+  .auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .archive-grid{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end}
+  .match-card{border:1px solid #d1d5db;border-radius:14px;padding:10px;margin:8px 0;background:#fff}
+  .match-card-title{font-weight:900;font-size:15px}
+  .match-card-meta{font-size:12px;color:#6b7280;margin-top:3px}
+  @media (max-width:900px){.auth-grid,.archive-grid{grid-template-columns:1fr}}
   .dls-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
   .dls-result{font-size:34px;font-weight:900;margin:4px 0}
   .dls-note{font-size:12px;color:#6b7280;line-height:1.45}
@@ -119,18 +125,20 @@
     .panel,.tile{box-shadow:none}
   }
 </style>
+
 <meta name="theme-color" content="#111827" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Cricket Scorer" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 </head>
 <body>
 <header>
   <div class="topbar">
-    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>economy + tally</span></h1>
+    <h1>Touch Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>account archive</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -148,6 +156,7 @@
     <button class="tab" data-tab="cards">Cards</button>
     <button class="tab" data-tab="scorebook">Scorebook</button>
     <button class="tab" data-tab="dls">DLS</button>
+    <button class="tab" data-tab="account">Account / Archive</button>
     <button class="tab" data-tab="log">Ball Log</button>
     <button class="tab" data-tab="setup">Setup</button>
   </div>
@@ -420,6 +429,74 @@
     </div>
   </div>
 
+
+  <div id="account" class="view">
+    <div class="auth-grid">
+      <div class="panel">
+        <div class="section-title">
+          <h2>Account</h2>
+          <span class="pill" id="authStatus">Not signed in</span>
+        </div>
+
+        <div id="signedOutBox">
+          <div class="field">
+            <label>Email</label>
+            <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+          </div>
+          <div class="field" style="margin-top:8px">
+            <label>Username / display name</label>
+            <input id="authUsername" autocomplete="nickname" placeholder="e.g. Martin">
+          </div>
+          <div class="field" style="margin-top:8px">
+            <label>Password</label>
+            <input id="authPassword" type="password" autocomplete="current-password" placeholder="Password">
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button class="success small" onclick="signUpUser()">Create account</button>
+            <button class="blue small" onclick="signInUser()">Sign in</button>
+            <button class="utility small" onclick="sendPasswordReset()">Reset password</button>
+          </div>
+          <p class="muted" id="authMessage" style="margin-top:10px">Create an account or sign in to save matches to your archive.</p>
+        </div>
+
+        <div id="signedInBox" style="display:none">
+          <p><strong>Signed in as:</strong> <span id="signedInEmail"></span></p>
+          <p><strong>Username:</strong> <span id="signedInUsername"></span></p>
+          <div class="row">
+            <button class="danger small" onclick="signOutUser()">Sign out</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">
+          <h2>Current match</h2>
+          <button class="blue small" onclick="saveCurrentMatchToCloud()">Save to archive</button>
+        </div>
+        <div class="field">
+          <label>Match name</label>
+          <input id="archiveMatchName" placeholder="e.g. St Helier v Caesareans">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Match date</label>
+          <input id="archiveMatchDate" type="date">
+        </div>
+        <p class="muted" id="currentCloudMatch">Not linked to an archived match yet.</p>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="section-title">
+        <h2>Match archive</h2>
+        <div class="row">
+          <button class="success small" onclick="createNewCloudMatch()">New archived match</button>
+          <button class="blue small" onclick="loadMatchArchive()">Refresh archive</button>
+        </div>
+      </div>
+      <div id="matchArchiveList" class="muted">Sign in to view your match archive.</div>
+    </div>
+  </div>
+
   <div id="log" class="view">
     <div class="panel">
       <div class="section-title"><h2>Ball log</h2><button class="small" onclick="exportCSV()">Export CSV</button></div>
@@ -513,6 +590,7 @@
   <button class="utility small" onclick="undo()">Undo</button>
   <button class="blue small" onclick="showTab('scorebook')">Scorebook</button>
   <button class="blue small" onclick="showTab('dls')">DLS</button>
+  <button class="blue small" onclick="showTab('account')">Archive</button>
   <button class="blue small" onclick="saveNow()">Save</button>
 </div>
 
@@ -1450,6 +1528,237 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch(() => {});
   });
 }
+</script>
+
+
+<script>
+const SUPABASE_URL = "https://nsdrkcofwroowdtuckvf.supabase.co";
+const SUPABASE_PUBLIC_KEY = "sb_publishable_HxKaTM1-B8nKhARMTBDFcw_GZDiwnDs";
+const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY) : null;
+let currentUser = null;
+let currentCloudMatchId = null;
+
+function cloudReady() {
+  return !!supabaseClient;
+}
+
+function setAuthMessage(message) {
+  const el = document.getElementById("authMessage");
+  if(el) el.textContent = message;
+}
+
+async function refreshAuthState() {
+  if(!cloudReady()) return;
+  const { data } = await supabaseClient.auth.getSession();
+  currentUser = data && data.session ? data.session.user : null;
+  await renderAuthUi();
+  if(currentUser) await loadMatchArchive();
+}
+
+async function renderAuthUi() {
+  const status = document.getElementById("authStatus");
+  const outBox = document.getElementById("signedOutBox");
+  const inBox = document.getElementById("signedInBox");
+  if(!status || !outBox || !inBox) return;
+
+  if(!currentUser) {
+    status.textContent = "Not signed in";
+    outBox.style.display = "block";
+    inBox.style.display = "none";
+    return;
+  }
+
+  status.textContent = "Signed in";
+  outBox.style.display = "none";
+  inBox.style.display = "block";
+  document.getElementById("signedInEmail").textContent = currentUser.email || "";
+
+  let username = "";
+  try {
+    const { data } = await supabaseClient.from("profiles").select("username").eq("id", currentUser.id).maybeSingle();
+    username = data && data.username ? data.username : "";
+  } catch(e) {}
+  document.getElementById("signedInUsername").textContent = username || "(not set)";
+}
+
+async function signUpUser() {
+  if(!cloudReady()) return alert("Supabase is not loaded yet.");
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  const username = document.getElementById("authUsername").value.trim();
+
+  if(!email || !password) return alert("Please enter an email and password.");
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: window.location.href,
+      data: { username }
+    }
+  });
+  if(error) return setAuthMessage(error.message);
+
+  if(data && data.user) {
+    currentUser = data.user;
+    try {
+      await supabaseClient.from("profiles").upsert({ id: data.user.id, username: username || email.split("@")[0] });
+    } catch(e) {}
+  }
+  setAuthMessage("Account created.  If email confirmation is enabled, check your inbox before signing in.");
+  await refreshAuthState();
+}
+
+async function signInUser() {
+  if(!cloudReady()) return alert("Supabase is not loaded yet.");
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  if(!email || !password) return alert("Please enter your email and password.");
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if(error) return setAuthMessage(error.message);
+  currentUser = data.user;
+  setAuthMessage("Signed in.");
+  await refreshAuthState();
+}
+
+async function signOutUser() {
+  if(!cloudReady()) return;
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  currentCloudMatchId = null;
+  const list = document.getElementById("matchArchiveList");
+  if(list) list.textContent = "Sign in to view your match archive.";
+  await renderAuthUi();
+}
+
+async function sendPasswordReset() {
+  if(!cloudReady()) return alert("Supabase is not loaded yet.");
+  const email = document.getElementById("authEmail").value.trim();
+  if(!email) return alert("Enter your email first.");
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href
+  });
+  if(error) return setAuthMessage(error.message);
+  setAuthMessage("Password reset email sent.  Check your inbox.");
+}
+
+function getMatchArchiveFields() {
+  const name = (document.getElementById("archiveMatchName").value || "").trim() || `${state.team || "Cricket match"}`;
+  const date = document.getElementById("archiveMatchDate").value || new Date().toISOString().slice(0,10);
+  return { name, date };
+}
+
+function makeCloudMatchData() {
+  const snap = snapshotState ? snapshotState() : JSON.parse(JSON.stringify(state));
+  snap.history = [];
+  return snap;
+}
+
+async function saveCurrentMatchToCloud() {
+  if(!currentUser) return alert("Please sign in first.");
+  const { name, date } = getMatchArchiveFields();
+  const payload = {
+    user_id: currentUser.id,
+    match_name: name,
+    match_date: date,
+    match_data: makeCloudMatchData()
+  };
+
+  let result;
+  if(currentCloudMatchId) {
+    result = await supabaseClient.from("matches").update(payload).eq("id", currentCloudMatchId).select().single();
+  } else {
+    result = await supabaseClient.from("matches").insert(payload).select().single();
+  }
+
+  if(result.error) return alert(result.error.message);
+  currentCloudMatchId = result.data.id;
+  document.getElementById("currentCloudMatch").textContent = `Linked to archive: ${result.data.match_name} (${result.data.match_date})`;
+  await loadMatchArchive();
+  alert("Match saved to archive.");
+}
+
+async function createNewCloudMatch() {
+  if(!currentUser) return alert("Please sign in first.");
+  if(!confirm("Start a new blank match on this device?  Save/export your current match first if needed.")) return;
+  clearMatch();
+  currentCloudMatchId = null;
+  document.getElementById("archiveMatchName").value = "";
+  document.getElementById("archiveMatchDate").value = new Date().toISOString().slice(0,10);
+  document.getElementById("currentCloudMatch").textContent = "New match.  Not saved to archive yet.";
+  showTab("score");
+}
+
+async function loadMatchArchive() {
+  if(!currentUser || !cloudReady()) return;
+  const list = document.getElementById("matchArchiveList");
+  if(!list) return;
+  list.textContent = "Loading archive...";
+  const { data, error } = await supabaseClient
+    .from("matches")
+    .select("id, match_name, match_date, updated_at, created_at")
+    .order("match_date", { ascending: false })
+    .order("updated_at", { ascending: false });
+
+  if(error) {
+    list.textContent = error.message;
+    return;
+  }
+
+  if(!data || !data.length) {
+    list.textContent = "No archived matches yet.";
+    return;
+  }
+
+  list.innerHTML = data.map(m => `
+    <div class="match-card">
+      <div class="match-card-title">${escapeHtml(m.match_name)}</div>
+      <div class="match-card-meta">Date: ${escapeHtml(m.match_date)} | Updated: ${new Date(m.updated_at || m.created_at).toLocaleString()}</div>
+      <div class="row" style="margin-top:8px">
+        <button class="blue small" onclick="openCloudMatch('${m.id}')">Open</button>
+        <button class="danger small" onclick="deleteCloudMatch('${m.id}')">Delete</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function openCloudMatch(id) {
+  if(!currentUser) return;
+  if(!confirm("Open this archived match?  Your current local match will be replaced.")) return;
+  const { data, error } = await supabaseClient.from("matches").select("*").eq("id", id).single();
+  if(error) return alert(error.message);
+  state = data.match_data || initialState();
+  state.history = [];
+  currentCloudMatchId = data.id;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  document.getElementById("archiveMatchName").value = data.match_name || "";
+  document.getElementById("archiveMatchDate").value = data.match_date || new Date().toISOString().slice(0,10);
+  document.getElementById("currentCloudMatch").textContent = `Linked to archive: ${data.match_name} (${data.match_date})`;
+  render();
+  showTab("score");
+}
+
+async function deleteCloudMatch(id) {
+  if(!currentUser) return;
+  if(!confirm("Delete this archived match?")) return;
+  const { error } = await supabaseClient.from("matches").delete().eq("id", id);
+  if(error) return alert(error.message);
+  if(currentCloudMatchId === id) currentCloudMatchId = null;
+  await loadMatchArchive();
+}
+
+window.addEventListener("load", () => {
+  const dateInput = document.getElementById("archiveMatchDate");
+  if(dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0,10);
+  if(cloudReady()) {
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      currentUser = session ? session.user : null;
+      renderAuthUi();
+      if(currentUser) loadMatchArchive();
+    });
+    refreshAuthState();
+  }
+});
 </script>
 
 </body>
