@@ -119,6 +119,13 @@
     .panel,.tile{box-shadow:none}
   }
 </style>
+<meta name="theme-color" content="#111827" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Cricket Scorer" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+
 </head>
 <body>
 <header>
@@ -1436,5 +1443,14 @@ function downloadText(text, filename, type){
 load();
 setInterval(saveNow, 30000);
 </script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+  });
+}
+</script>
+
 </body>
 </html>
