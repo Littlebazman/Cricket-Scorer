@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Martin's Cricket Scorer - Full Team Sheets</title>
+<title>Martin's Cricket Scorer</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -152,7 +152,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>full team sheets</span></h1>
+    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.11</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -536,7 +536,7 @@
         </div>
         <div class="field">
           <label>Match name</label>
-          <input id="archiveMatchName" placeholder="e.g. Walkovers Socials v England">
+          <input id="archiveMatchName" placeholder="e.g. Walkovers Socials v England XI XI">
         </div>
         <div class="field" style="margin-top:8px">
           <label>Match date</label>
@@ -583,43 +583,27 @@
         <div class="field"><label>Fielding team</label><input id="fieldingTeamName" value="Fielding XI"></div>
         <div class="field"><label>Overs</label><input id="maxOvers" type="number" min="1" max="60" value="35"></div>
         <div class="field"><label>Players</label><input id="playerCount" type="number" min="2" max="15" value="11"></div>
-        <div class="field"><label>Bowlers</label><input id="bowlerCount" type="number" min="1" max="15" value="7"></div>
+        <div class="field"><label>Bowlers</label><input id="bowlerCount" type="number" min="1" max="15" value="11"></div>
       </div>
       <p class="muted">Changing setup after scoring has started is not recommended.  Use Reset match first if you want a clean new innings.</p>
 
       <div class="section-title" style="margin-top:14px"><h2>Player names</h2></div>
-      <p class="muted">Type real names here before the match.  Use Apply setup to load them into the scorer.</p>
+      <p class="muted">Type or correct names here.  Use Apply setup before a new match, or Update names during an innings without losing your progress.</p>
       <div class="grid">
         <div>
           <strong>Batters</strong>
           <div class="name-grid" id="batterNameGrid"></div>
         </div>
         <div>
-          <strong>Bowlers</strong>
+          <strong>Fielding players / bowlers</strong>
           <div class="name-grid" id="bowlerNameGrid"></div>
         </div>
       </div>
 
-      <button class="success" onclick="applySetup()" style="margin-top:12px">Apply setup</button>
+      <div class="row" style="margin-top:12px"><button class="success" onclick="applySetup()">Apply setup / new match</button><button class="utility" onclick="updateNamesFromPlayerSection()">Update names without resetting</button></div>
     </div>
 
 
-
-    <div class="panel" style="margin-top:12px">
-      <div class="section-title"><h2>Team sheet / name corrections</h2></div>
-      <p class="muted">Use this to correct spelling mistakes.  Both teams have 11 player slots.  Changes update the scorecard, ball log, archive data and dismissal/fielding references where possible.</p>
-      <div class="team-sheet-grid">
-        <div>
-          <strong>Batting players</strong>
-          <div id="battingTeamSheetEditor"></div>
-        </div>
-        <div>
-          <strong>Fielding players / bowlers</strong>
-          <div id="fieldingTeamSheetEditor"></div>
-        </div>
-      </div>
-      <button class="success small" style="margin-top:10px" onclick="applyTeamSheetEdits()">Apply name corrections</button>
-    </div>
 
     <div class="panel" style="margin-top:12px">
       <div class="section-title"><h2>Innings / target</h2></div>
@@ -768,7 +752,7 @@ let state;
 
 function initialState(){
   const players = Array.from({length:11},(_,i)=>`Batter ${i+1}`);
-  const bowlers = Array.from({length:7},(_,i)=>`Bowler ${i+1}`);
+  const bowlers = Array.from({length:11},(_,i)=>`Fielder ${i+1}`);
   const bat = {};
   players.forEach(p=>bat[p]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:"",minutes:""});
   const bowl = {};
@@ -801,20 +785,28 @@ function uniqueNames(names){
   });
 }
 function renderNameInputs(){
+  if(typeof ensureWeekendFields === "function") ensureWeekendFields();
+
   const batterCount = Math.max(2, Math.min(15, Number(document.getElementById("playerCount").value)||11));
-  const bowlerCount = Math.max(1, Math.min(15, Number(document.getElementById("bowlerCount").value)||7));
+  const bowlerCount = Math.max(1, Math.min(15, Number(document.getElementById("bowlerCount").value)||11));
   const batterGrid = document.getElementById("batterNameGrid");
   const bowlerGrid = document.getElementById("bowlerNameGrid");
   if(!batterGrid || !bowlerGrid) return;
+
   const oldBatters = Array.from(document.querySelectorAll(".batter-name")).map(x=>x.value);
-  const oldBowlers = Array.from(document.querySelectorAll(".bowler-name")).map(x=>x.value);
+  const oldFielders = Array.from(document.querySelectorAll(".bowler-name")).map(x=>x.value);
+
+  const battingNames = state && state.players ? state.players : [];
+  const fieldingNames = state && state.fielders ? state.fielders : (state && state.bowlers ? state.bowlers : []);
+
   batterGrid.innerHTML = Array.from({length:batterCount},(_,i)=>{
-    const val = oldBatters[i] || (state && state.players && state.players[i]) || `Batter ${i+1}`;
-    return `<div class="field"><label>Batter ${i+1}</label><input class="batter-name" value="${escapeAttr(val)}"></div>`;
+    const val = oldBatters[i] || battingNames[i] || `Batter ${i+1}`;
+    return `<div class="field"><label>Batter ${i+1}</label><input class="batter-name" data-old="${escapeAttr(val)}" value="${escapeAttr(val)}"></div>`;
   }).join("");
+
   bowlerGrid.innerHTML = Array.from({length:bowlerCount},(_,i)=>{
-    const val = oldBowlers[i] || (state && state.bowlers && state.bowlers[i]) || `Bowler ${i+1}`;
-    return `<div class="field"><label>Bowler ${i+1}</label><input class="bowler-name" value="${escapeAttr(val)}"></div>`;
+    const val = oldFielders[i] || fieldingNames[i] || `Fielder ${i+1}`;
+    return `<div class="field"><label>Fielder/Bowler ${i+1}</label><input class="bowler-name" data-old="${escapeAttr(val)}" value="${escapeAttr(val)}"></div>`;
   }).join("");
 }
 function escapeAttr(value){
@@ -1135,7 +1127,7 @@ function resetCurrentInnings(){
   const keepMaxWickets = state.maxWickets || 10;
 
   const players = Array.from({length:11},(_,i)=>`Batter ${i+1}`);
-  const bowlers = Array.from({length:7},(_,i)=>`Bowler ${i+1}`);
+  const bowlers = Array.from({length:11},(_,i)=>`Fielder ${i+1}`);
   const bat = {};
   players.forEach(p=>bat[p]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""});
   const bowl = {};
@@ -1184,7 +1176,7 @@ function clearMatch(){
 function applySetup(){
   if(state.log.length && !confirm("You already have balls recorded.  Reset and apply new setup?")) return;
   const playerCount = Math.max(2, Math.min(15, Number(document.getElementById("playerCount").value)||11));
-  const bowlerCount = Math.max(1, Math.min(15, Number(document.getElementById("bowlerCount").value)||7));
+  const bowlerCount = Math.max(1, Math.min(15, Number(document.getElementById("bowlerCount").value)||11));
   const enteredBatters = getEnteredNames(".batter-name", "Batter", playerCount);
   const enteredBowlers = getEnteredNames(".bowler-name", "Bowler", bowlerCount);
   state = initialState();
@@ -1195,6 +1187,7 @@ function applySetup(){
   state.maxWickets = Math.min(10, Math.max(1, playerCount - 1));
   state.players = enteredBatters;
   state.bowlers = enteredBowlers;
+  state.fielders = enteredBowlers.slice();
   state.fielders = Array.from({length:11},(_,i)=>`Fielder ${i+1}`);
   state.bat = {}; state.players.forEach(p=>state.bat[p]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""});
   state.bowl = {}; state.bowlers.forEach(b=>state.bowl[b]={balls:0,runs:0,wkts:0,wides:0,noballs:0});
@@ -2284,7 +2277,7 @@ function firstInningsSnapshot(){
 }
 function resetScoringForNewInnings(){
   const players = Array.from({length:11},(_,i)=>`Batter ${i+1}`);
-  const bowlers = Array.from({length:7},(_,i)=>`Bowler ${i+1}`);
+  const bowlers = Array.from({length:11},(_,i)=>`Fielder ${i+1}`);
   const bat = {};
   players.forEach(p=>bat[p]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""});
   const bowl = {};
@@ -2374,18 +2367,10 @@ function ensureWeekendFields(){
   if(!state.fieldingStats) state.fieldingStats = {};
   if(!state.retiredPlayers) state.retiredPlayers = [];
   if(state.maxWickets == null) state.maxWickets = 10;
-
-  // Always keep a full 11-player fielding team sheet.
   for(let i = 1; i <= 11; i++){
-    const placeholder = `Fielder ${i}`;
-    if(!state.fielders[i-1]) state.fielders[i-1] = placeholder;
-  }
-
-  // Always keep at least 11 batting slots too.
-  if(!state.players) state.players = [];
-  for(let i = 1; i <= 11; i++){
-    const placeholder = `Batter ${i}`;
-    if(!state.players[i-1]) state.players[i-1] = placeholder;
+    if(!state.fielders[i-1]) state.fielders[i-1] = `Fielder ${i}`;
+    if(!state.players) state.players = [];
+    if(!state.players[i-1]) state.players[i-1] = `Batter ${i}`;
     if(!state.bat) state.bat = {};
     if(!state.bat[state.players[i-1]]) state.bat[state.players[i-1]] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""};
   }
@@ -2496,6 +2481,7 @@ function renderTeamSheetEditors(){
       <span></span>
     </div>`).join("");
 }
+
 function renameEverywhere(oldName, newName){
   oldName = String(oldName || "").trim();
   newName = String(newName || "").trim();
@@ -2532,56 +2518,41 @@ function renameEverywhere(oldName, newName){
     e.fielder = ren(e.fielder);
     if(e.dismissal) e.dismissal = String(e.dismissal).split(oldName).join(newName);
   });
-
-  if(state.firstInnings && state.firstInnings.log){
-    state.firstInnings.log.forEach(e => {
-      e.striker = ren(e.striker);
-      e.nonStriker = ren(e.nonStriker);
-      e.bowler = ren(e.bowler);
-      e.fielder = ren(e.fielder);
-      if(e.dismissal) e.dismissal = String(e.dismissal).split(oldName).join(newName);
-    });
-  }
 }
-function applyTeamSheetEdits(){
-  ensureWeekendFields();
+function updateNamesFromPlayerSection(){
+  if(typeof ensureWeekendFields === "function") ensureWeekendFields();
 
-  // Batting XI
-  document.querySelectorAll(".team-edit-batter").forEach(input => {
-    const idx = Number(input.dataset.index);
-    const oldName = String(input.dataset.old || "").trim();
-    const newName = String(input.value || "").trim() || `Batter ${idx+1}`;
+  const newBatters = Array.from(document.querySelectorAll(".batter-name")).map((x,i)=>cleanName(x.value, `Batter ${i+1}`));
+  const newFielders = Array.from(document.querySelectorAll(".bowler-name")).map((x,i)=>cleanName(x.value, `Fielder ${i+1}`));
 
-    if(state.players[idx] && state.players[idx] !== oldName){
-      // If the underlying state changed since render, prefer current state.
-      renameEverywhere(state.players[idx], newName);
-    } else {
-      renameEverywhere(oldName, newName);
-    }
-    state.players[idx] = newName;
+  newBatters.forEach((newName, i) => {
+    const oldName = (state.players && state.players[i]) || `Batter ${i+1}`;
+    renameEverywhere(oldName, newName);
+    if(!state.players) state.players = [];
+    state.players[i] = newName;
+    if(!state.bat) state.bat = {};
     if(!state.bat[newName]) state.bat[newName] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:""};
   });
 
-  // Fielding XI
-  document.querySelectorAll(".team-edit-fielder").forEach(input => {
-    const idx = Number(input.dataset.index);
-    const oldName = String(input.dataset.old || "").trim();
-    const newName = String(input.value || "").trim() || `Fielder ${idx+1}`;
+  newFielders.forEach((newName, i) => {
+    const oldName = (state.fielders && state.fielders[i]) || (state.bowlers && state.bowlers[i]) || `Fielder ${i+1}`;
+    renameEverywhere(oldName, newName);
+    if(!state.fielders) state.fielders = [];
+    state.fielders[i] = newName;
 
-    if(state.fielders[idx] && state.fielders[idx] !== oldName){
-      renameEverywhere(state.fielders[idx], newName);
-    } else {
-      renameEverywhere(oldName, newName);
+    if(!state.bowlers) state.bowlers = [];
+    if(!state.bowlers[i] || state.bowlers[i] === oldName || /^Fielder \d+$/i.test(state.bowlers[i]) || /^Bowler \d+$/i.test(state.bowlers[i])){
+      state.bowlers[i] = newName;
     }
-    state.fielders[idx] = newName;
-
-    // A fielder may later bowl, but do not force all 11 into bowling figures.
+    if(!state.bowl) state.bowl = {};
+    if(!state.bowl[newName]) state.bowl[newName] = {balls:0,runs:0,wkts:0,wides:0,noballs:0};
   });
 
   saveNow();
   render();
-  alert("Team sheet names updated.");
+  alert("Names updated without resetting the innings.");
 }
+
 function populateCatcherDropdown(){
   const select = document.getElementById("catcherSelect");
   if(!select) return;
