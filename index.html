@@ -152,7 +152,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.13</span></h1>
+    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.14</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -1362,6 +1362,18 @@ function populateSelect(id, items, selected){
   if(!el) return;
   el.innerHTML = items.map(x=>`<option ${x===selected?"selected":""}>${x}</option>`).join("");
 }
+
+function isPlaceholderPlayerName(name){
+  return /^Fielder \d+$/i.test(String(name || "").trim()) || /^Bowler \d+$/i.test(String(name || "").trim());
+}
+function realFieldingNamesForDropdown(){
+  const raw = (typeof allFielders === "function" ? allFielders() : ((state.fielders || []).concat(state.bowlers || []))).filter(Boolean);
+  const unique = [];
+  raw.forEach(n => { if(n && !unique.includes(n)) unique.push(n); });
+  const real = unique.filter(n => !isPlaceholderPlayerName(n));
+  return real.length ? real : unique;
+}
+
 function populateStartInningsDropdowns(){
   if(typeof ensureWeekendFields === "function") ensureWeekendFields();
 
@@ -1370,7 +1382,7 @@ function populateStartInningsDropdowns(){
   const bowlerSel = document.getElementById("startBowlerSelect");
 
   const batters = (state.players || []).filter(Boolean);
-  const fielders = (typeof allFielders === "function" ? allFielders() : (state.fielders || state.bowlers || [])).filter(Boolean);
+  const fielders = (typeof realFieldingNamesForDropdown === "function" ? realFieldingNamesForDropdown() : (typeof allFielders === "function" ? allFielders() : (state.fielders || state.bowlers || []))).filter(Boolean);
 
   function fill(select, names, selected){
     if(!select) return;
@@ -2618,13 +2630,13 @@ function updateNamesFromPlayerSection(){
 function populateCatcherDropdown(){
   const select = document.getElementById("catcherSelect");
   if(!select) return;
-  const names = allFielders();
+  const names = (typeof realFieldingNamesForDropdown === "function") ? realFieldingNamesForDropdown() : allFielders();
   select.innerHTML = `<option value="">Select catcher...</option>` + names.map(n=>`<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join("");
 }
 function populateEditBowlerDropdown(selected){
   const sel = document.getElementById("editBallBowler");
   if(!sel) return;
-  const names = allFielders();
+  const names = (typeof realFieldingNamesForDropdown === "function") ? realFieldingNamesForDropdown() : allFielders();
   if(selected && !names.includes(selected)) names.unshift(selected);
   sel.innerHTML = names.map(n=>`<option value="${escapeAttr(n)}" ${n===selected?"selected":""}>${escapeHtml(n)}</option>`).join("");
 }
