@@ -1,4 +1,4 @@
-const CACHE_NAME = "martins-cricket-scorer-v115-start-window-fix";
+const CACHE_NAME = "martins-cricket-scorer-v117-start-x-top-right";
 const ASSETS = [
   "./",
   "./index.html",

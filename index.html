@@ -138,9 +138,11 @@
   .retired-badge{display:inline-block;border-radius:999px;background:#fef3c7;color:#92400e;font-weight:900;font-size:11px;padding:2px 6px;margin-left:4px}
   @media(max-width:900px){.team-sheet-grid{grid-template-columns:1fr}.player-edit-row{grid-template-columns:1fr}}
 
-
-  .modal-close-x{position:absolute;top:10px;right:12px;border:0;background:#fee2e2;color:#991b1b;border-radius:999px;width:34px;height:34px;font-size:22px;font-weight:900;line-height:1;cursor:pointer}
   .modal{position:relative}
+  .modal-close-x{position:absolute;top:10px;right:10px;z-index:5;border:0;background:#fee2e2;color:#991b1b;border-radius:999px;width:36px;height:36px;font-size:24px;font-weight:900;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+  .modal-close-x:hover{background:#fecaca}
+
+.modal{position:relative}
 </style>
 
 <meta name="theme-color" content="#111827" />
@@ -155,7 +157,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.15</span></h1>
+    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.17</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -664,6 +666,7 @@
       </div>
       <div class="row">
         <button class="success" onclick="startInningsFromPrompt()">Start scoring</button>
+      <button class="small" type="button" onclick="closeStartPrompt()">Cancel / choose later</button>
         <button class="utility" onclick="startWithDefaults()">Use selected defaults</button>
       </div>
     </div>
@@ -1166,6 +1169,7 @@ function resetCurrentInnings(){
   state.inningsComplete = false;
   state.promptBowlerDue = false;
   state.startPromptDone = false;
+  startPromptDismissed = false;
 
   state.firstInnings = keepFirstInnings;
   state.target = keepTarget;
@@ -1430,7 +1434,7 @@ function populateStartInningsDropdowns(){
   fill(bowlerSel, fielders, state.bowler || fielders[0]);
 }
 function showStartPrompt(){
-  if(state.startPromptDone || state.log.length > 0) return;
+  if(startPromptDismissed || state.startPromptDone || state.log.length > 0) return;
   const backdrop = document.getElementById("startPrompt");
   if(!backdrop) return;
 
@@ -1448,8 +1452,9 @@ function showStartPrompt(){
   setTimeout(() => { if(sel) sel.focus(); }, 50);
 }
 function closeStartPrompt(){
-  const backdrop = document.getElementById("startPrompt");
-  if(backdrop) backdrop.style.display = "none";
+  startPromptDismissed = true;
+  const box = document.getElementById("startPrompt");
+  if(box) box.style.display = "none";
 }
 function isFinalWicketPending(){
   return (state.wickets + 1) >= allOutWicketLimit();
