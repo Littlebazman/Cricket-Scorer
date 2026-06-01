@@ -152,7 +152,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.11</span></h1>
+    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.13</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -633,23 +633,35 @@
 <div id="startPrompt" class="modal-backdrop no-print">
   <div class="modal start-modal">
     <h2>Start innings</h2>
-    <p>Enter the opening batters and opening bowler.  You can still add more batters and bowlers later.</p>
+    <p>Select the opening batters and opening bowler from the names already entered in Setup.  If someone is missing, type their name in the optional box.</p>
     <div class="start-grid">
       <div class="field">
         <label>Striker / opening batter 1</label>
-        <input id="startStrikerName" placeholder="e.g. Smith">
+        <select id="startStrikerSelect"></select>
       </div>
       <div class="field">
         <label>Non-striker / opening batter 2</label>
-        <input id="startNonStrikerName" placeholder="e.g. Jones">
+        <select id="startNonStrikerSelect"></select>
       </div>
       <div class="field">
         <label>Opening bowler</label>
-        <input id="startBowlerName" placeholder="e.g. Brown">
+        <select id="startBowlerSelect"></select>
+      </div>
+      <div class="field">
+        <label>New striker name, if not listed</label>
+        <input id="startStrikerName" placeholder="Optional">
+      </div>
+      <div class="field">
+        <label>New non-striker name, if not listed</label>
+        <input id="startNonStrikerName" placeholder="Optional">
+      </div>
+      <div class="field">
+        <label>New bowler name, if not listed</label>
+        <input id="startBowlerName" placeholder="Optional">
       </div>
       <div class="row">
         <button class="success" onclick="startInningsFromPrompt()">Start scoring</button>
-        <button class="utility" onclick="startWithDefaults()">Use Batter 1 / Batter 2 / Bowler 1</button>
+        <button class="utility" onclick="startWithDefaults()">Use selected defaults</button>
       </div>
     </div>
   </div>
@@ -1350,18 +1362,42 @@ function populateSelect(id, items, selected){
   if(!el) return;
   el.innerHTML = items.map(x=>`<option ${x===selected?"selected":""}>${x}</option>`).join("");
 }
+function populateStartInningsDropdowns(){
+  if(typeof ensureWeekendFields === "function") ensureWeekendFields();
+
+  const strikerSel = document.getElementById("startStrikerSelect");
+  const nonStrikerSel = document.getElementById("startNonStrikerSelect");
+  const bowlerSel = document.getElementById("startBowlerSelect");
+
+  const batters = (state.players || []).filter(Boolean);
+  const fielders = (typeof allFielders === "function" ? allFielders() : (state.fielders || state.bowlers || [])).filter(Boolean);
+
+  function fill(select, names, selected){
+    if(!select) return;
+    select.innerHTML = names.map(n => `<option value="${escapeAttr(n)}" ${n===selected?"selected":""}>${escapeHtml(n)}</option>`).join("");
+  }
+
+  fill(strikerSel, batters, state.striker || batters[0]);
+  fill(nonStrikerSel, batters, state.nonStriker || batters[1] || batters[0]);
+  fill(bowlerSel, fielders.length ? fielders : (state.bowlers || []), state.bowler || (fielders[0] || (state.bowlers || [])[0]));
+}
 function showStartPrompt(){
   if(state.startPromptDone || state.log.length > 0) return;
   const backdrop = document.getElementById("startPrompt");
   if(!backdrop) return;
+
+  populateStartInningsDropdowns();
+
   const s = document.getElementById("startStrikerName");
   const n = document.getElementById("startNonStrikerName");
   const b = document.getElementById("startBowlerName");
-  if(s && !s.value) s.value = state.striker && !/^Batter 1$/i.test(state.striker) ? state.striker : "";
-  if(n && !n.value) n.value = state.nonStriker && !/^Batter 2$/i.test(state.nonStriker) ? state.nonStriker : "";
-  if(b && !b.value) b.value = state.bowler && !/^Bowler 1$/i.test(state.bowler) ? state.bowler : "";
+  if(s) s.value = "";
+  if(n) n.value = "";
+  if(b) b.value = "";
+
   backdrop.style.display = "flex";
-  setTimeout(() => { if(s) s.focus(); }, 50);
+  const sel = document.getElementById("startStrikerSelect");
+  setTimeout(() => { if(sel) sel.focus(); }, 50);
 }
 function closeStartPrompt(){
   const backdrop = document.getElementById("startPrompt");
@@ -1422,16 +1458,42 @@ function ensureBatterExists(name, fallback){
   return finalName;
 }
 function startInningsFromPrompt(){
-  const strikerName = document.getElementById("startStrikerName").value;
-  const nonStrikerName = document.getElementById("startNonStrikerName").value;
-  const bowlerName = document.getElementById("startBowlerName").value;
-  const striker = ensureIncomingBatterExists(strikerName, "Batter 1");
-  const nonStriker = ensureIncomingBatterExists(nonStrikerName, "Batter 2");
+  if(typeof updateNamesFromPlayerSection === "function"){
+    // Pull in any latest names from Setup's Player Names section before starting.
+    // Do this silently rather than alerting.
+    try {
+      const oldAlert = window.alert;
+      window.alert = function(){};
+      updateNamesFromPlayerSection();
+      window.alert = oldAlert;
+    } catch(e) {
+      window.alert = window.alert;
+    }
+  }
+
+  populateStartInningsDropdowns();
+
+  const strikerTyped = String((document.getElementById("startStrikerName") || {}).value || "").trim();
+  const nonStrikerTyped = String((document.getElementById("startNonStrikerName") || {}).value || "").trim();
+  const bowlerTyped = String((document.getElementById("startBowlerName") || {}).value || "").trim();
+
+  const strikerSelected = document.getElementById("startStrikerSelect") ? document.getElementById("startStrikerSelect").value : "";
+  const nonStrikerSelected = document.getElementById("startNonStrikerSelect") ? document.getElementById("startNonStrikerSelect").value : "";
+  const bowlerSelected = document.getElementById("startBowlerSelect") ? document.getElementById("startBowlerSelect").value : "";
+
+  const striker = ensureIncomingBatterExists(strikerTyped || strikerSelected || "Batter 1", "Batter 1");
+  const nonStriker = ensureIncomingBatterExists(nonStrikerTyped || nonStrikerSelected || "Batter 2", "Batter 2");
+
   if(striker === nonStriker){
-    alert("Please use two different opening batters.");
+    alert("Please choose two different opening batters.");
     return;
   }
-  const bowler = ensureBowlerExists(bowlerName || "Bowler 1");
+
+  const bowler = ensureBowlerExists(bowlerTyped || bowlerSelected || "Bowler 1");
+
+  if(!state.fielders) state.fielders = [];
+  if(bowler && !state.fielders.includes(bowler)) state.fielders.push(bowler);
+
   state.striker = striker;
   state.nonStriker = nonStriker;
   state.bowler = bowler;
@@ -1520,7 +1582,7 @@ document.addEventListener("keydown", (ev)=>{
     ev.preventDefault();
     addPromptBowler();
   }
-  if(ev.target && ["startStrikerName","startNonStrikerName","startBowlerName"].includes(ev.target.id) && ev.key === "Enter"){
+  if(ev.target && ["startStrikerName","startNonStrikerName","startBowlerName","startStrikerSelect","startNonStrikerSelect","startBowlerSelect"].includes(ev.target.id) && ev.key === "Enter"){
     ev.preventDefault();
     startInningsFromPrompt();
   }
