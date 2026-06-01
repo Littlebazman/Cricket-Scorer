@@ -1,4 +1,4 @@
-const CACHE_NAME = "martins-cricket-scorer-v8-name-icon";
+const CACHE_NAME = "martins-cricket-scorer-v9-weekend-feedback";
 const ASSETS = [
   "./",
   "./index.html",

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Martin's Cricket Scorer</title>
+<title>Martin's Cricket Scorer - Weekend Feedback</title>
 <style>
   :root{
     --bg:#f5f7fb;
@@ -131,6 +131,13 @@
     .view{display:block}
     .panel,.tile{box-shadow:none}
   }
+
+  .team-sheet-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .player-edit-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin:6px 0;align-items:end}
+  .matrix-wrap{overflow:auto;max-width:100%}
+  .retired-badge{display:inline-block;border-radius:999px;background:#fef3c7;color:#92400e;font-weight:900;font-size:11px;padding:2px 6px;margin-left:4px}
+  @media(max-width:900px){.team-sheet-grid{grid-template-columns:1fr}.player-edit-row{grid-template-columns:1fr}}
+
 </style>
 
 <meta name="theme-color" content="#111827" />
@@ -145,7 +152,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>reset controls</span></h1>
+    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>weekend feedback</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -185,6 +192,7 @@
   <div class="tabs no-print">
     <button class="tab active" data-tab="score">Score</button>
     <button class="tab" data-tab="cards">Cards</button>
+    <button class="tab" data-tab="matchups">Matchups</button>
     <button class="tab" data-tab="scorebook">Scorebook</button>
     <button class="tab" data-tab="dls">DLS</button>
     <button class="tab" data-tab="account">Account / Archive</button>
@@ -237,8 +245,12 @@
               </select>
             </div>
             <div class="field" id="catcherField" style="display:none">
-              <label>Catcher's name</label>
-              <input id="catcherName" placeholder="e.g. Smith">
+              <label>Catcher</label>
+              <select id="catcherSelect"></select>
+            </div>
+            <div class="field" id="newCatcherField" style="display:none">
+              <label>New fielder if not listed</label>
+              <input id="catcherName" placeholder="Type fielder name">
             </div>
             <div class="field" id="wicketRunsField" style="display:none">
               <label>Completed runs before run out</label>
@@ -317,6 +329,21 @@
     </div>
   </div>
 
+
+
+  <div id="matchups" class="view">
+    <div class="panel">
+      <div class="section-title"><h2>Batter v bowler balls faced</h2></div>
+      <p class="muted">Shows legal balls faced by each batter from each bowler.  Wides/no-balls do not count as balls faced.</p>
+      <div class="matrix-wrap">
+        <table id="bowlerBallsMatrix"></table>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <div class="section-title"><h2>Fielding stats</h2></div>
+      <table id="fieldingStatsTable"></table>
+    </div>
+  </div>
 
   <div id="scorebook" class="view">
     <div class="panel no-print">
@@ -552,7 +579,8 @@
     <div class="panel">
       <div class="section-title"><h2>Match setup</h2></div>
       <div class="settings-grid">
-        <div class="field"><label>Team batting</label><input id="teamName" value="Practice XI"></div>
+        <div class="field"><label>Batting team</label><input id="teamName" value="Practice XI"></div>
+        <div class="field"><label>Fielding team</label><input id="fieldingTeamName" value="Fielding XI"></div>
         <div class="field"><label>Overs</label><input id="maxOvers" type="number" min="1" max="60" value="35"></div>
         <div class="field"><label>Players</label><input id="playerCount" type="number" min="2" max="15" value="11"></div>
         <div class="field"><label>Bowlers</label><input id="bowlerCount" type="number" min="1" max="15" value="7"></div>
@@ -575,6 +603,23 @@
       <button class="success" onclick="applySetup()" style="margin-top:12px">Apply setup</button>
     </div>
 
+
+
+    <div class="panel" style="margin-top:12px">
+      <div class="section-title"><h2>Team sheet / name corrections</h2></div>
+      <p class="muted">Use this to correct spelling mistakes.  It updates the scorecard, ball log, archive data and dismissal/fielding references where possible.</p>
+      <div class="team-sheet-grid">
+        <div>
+          <strong>Batting players</strong>
+          <div id="battingTeamSheetEditor"></div>
+        </div>
+        <div>
+          <strong>Fielding players / bowlers</strong>
+          <div id="fieldingTeamSheetEditor"></div>
+        </div>
+      </div>
+      <button class="success small" style="margin-top:10px" onclick="applyTeamSheetEdits()">Apply name corrections</button>
+    </div>
 
     <div class="panel" style="margin-top:12px">
       <div class="section-title"><h2>Innings / target</h2></div>
@@ -648,6 +693,14 @@
     <h2>Edit ball</h2>
     <p id="editBallPromptText">Edit this delivery, then recalculate the innings from the ball log.</p>
     <div class="edit-grid">
+      <div class="field">
+        <label>Bowler</label>
+        <select id="editBallBowler"></select>
+      </div>
+      <div class="field">
+        <label>Apply bowler change</label>
+        <select id="editBowlerApplyScope"><option value="ball">This ball only</option><option value="over">Whole over</option></select>
+      </div>
       <div class="field">
         <label>Event type</label>
         <select id="editBallType" onchange="toggleEditBallFields()">
@@ -851,6 +904,7 @@ function scoreBall(ev){
     over: overNotationBefore(legal),
     striker, nonStriker: state.nonStriker, bowler, type: ev.type,
     runs: scoreAdd, batRuns, extraType, extraRuns, wicket, dismissal,
+    fielder: ev.fielder || '', fieldingCredit: ev.fieldingCredit || '',
     score: state.score, wickets: state.wickets
   });
 
@@ -864,6 +918,8 @@ function scoreBall(ev){
       state.promptBowlerDue = true;
     }
   }
+
+  if(ev.fieldingCredit && ev.fielder && typeof addFielderStat === 'function') addFielderStat(ev.fielder, ev.fieldingCredit);
 
   if(state.wickets >= allOutWicketLimit() || state.legalBalls >= state.maxOvers*6 || (state.inningsNumber === 2 && state.target && state.score >= state.target)){
     state.inningsComplete = true;
@@ -937,7 +993,7 @@ function openWicket(){
     return;
   }
   closePopups();
-  populateSelect("newBatter", state.players.filter(p=>!isInPlay(p) && !state.bat[p].out));
+  populateSelect("newBatter", state.players.filter(p=>!isInPlay(p) && !state.bat[p].out && (!state.bat[p].retired || !state.players.some(x=>!isInPlay(x) && !state.bat[x].out && !state.bat[x].retired && !(state.bat[x].balls || state.bat[x].runs)))));
   const incoming = document.getElementById("incomingBatterName");
   if(incoming) incoming.value = "";
 
@@ -960,6 +1016,9 @@ function toggleWicketRuns(){
   const showCatcher = dismissal === "Caught";
   document.getElementById("wicketRunsField").style.display = showRuns ? "grid" : "none";
   document.getElementById("catcherField").style.display = showCatcher ? "grid" : "none";
+  const newCatcherField = document.getElementById("newCatcherField");
+  if(newCatcherField) newCatcherField.style.display = showCatcher ? "grid" : "none";
+  if(showCatcher && typeof populateCatcherDropdown === "function") populateCatcherDropdown();
   const catcherInput = document.getElementById("catcherName");
   if(catcherInput && !showCatcher) catcherInput.value = "";
   document.getElementById("wicketHelp").textContent = showRuns
@@ -992,16 +1051,36 @@ function scoreWicket(){
   }
 
   let dismissal = dismissalType;
+  if(dismissalType === "Retired"){
+    retireCurrentBatter();
+    return;
+  }
   if(dismissalType === "Caught"){
-    const catcher = String(document.getElementById("catcherName").value || "").trim();
+    const selected = document.getElementById("catcherSelect") ? document.getElementById("catcherSelect").value : "";
+    const typed = String(document.getElementById("catcherName") ? document.getElementById("catcherName").value : "").trim();
+    const catcher = selected || typed;
     if(!catcher){
-      alert("Please enter the catcher's name.");
-      document.getElementById("catcherName").focus();
+      alert("Please select or enter the catcher's name.");
+      const cs = document.getElementById("catcherSelect");
+      if(cs) cs.focus();
       return;
     }
+    if(!state.fielders.includes(catcher)) state.fielders.push(catcher);
     dismissal = `Caught by ${catcher}`;
+    scoreBall({type:"run",runs:runs,wicket:true,dismissal,newBatter:nb, fielder:catcher, fieldingCredit:"catches"});
+    return;
   } else if(dismissalType === "Caught & Bowled"){
     dismissal = `Caught & Bowled ${state.bowler}`;
+    scoreBall({type:"run",runs:runs,wicket:true,dismissal,newBatter:nb, fielder:state.bowler, fieldingCredit:"catches"});
+    return;
+  }
+  if(dismissalType === "Run out"){
+    scoreBall({type:"run",runs:runs,wicket:true,dismissal,newBatter:nb, fieldingCredit:"runouts"});
+    return;
+  }
+  if(dismissalType === "Stumped"){
+    scoreBall({type:"run",runs:runs,wicket:true,dismissal,newBatter:nb, fieldingCredit:"stumpings"});
+    return;
   }
   scoreBall({type:"run",runs:runs,wicket:true,dismissal,newBatter:nb});
 }
@@ -1010,7 +1089,11 @@ function closePopups(){
   document.getElementById("wicketBox").style.display="none";
 }
 function nextAvailableBatter(){
-  return state.players.find(p=>!state.bat[p].out && p!==state.striker && p!==state.nonStriker);
+  const unused = state.players.find(p => !state.bat[p].out && !state.bat[p].retired && p!==state.striker && p!==state.nonStriker && !(state.bat[p].balls || state.bat[p].runs));
+  if(unused) return unused;
+  const availableRetired = state.players.find(p => state.bat[p].retired && !state.bat[p].out && p!==state.striker && p!==state.nonStriker);
+  if(availableRetired) return availableRetired;
+  return state.players.find(p=>!state.bat[p].out && !state.bat[p].retired && p!==state.striker && p!==state.nonStriker);
 }
 function isInPlay(p){ return p===state.striker || p===state.nonStriker; }
 function swapStrike(record=true){
@@ -1105,6 +1188,8 @@ function applySetup(){
   const enteredBowlers = getEnteredNames(".bowler-name", "Bowler", bowlerCount);
   state = initialState();
   state.team = document.getElementById("teamName").value || "Practice XI";
+  state.battingTeam = state.team;
+  state.fieldingTeam = document.getElementById("fieldingTeamName") ? (document.getElementById("fieldingTeamName").value || "Fielding XI") : "Fielding XI";
   state.maxOvers = Math.max(1, Math.min(60, Number(document.getElementById("maxOvers").value)||35));
   state.maxWickets = Math.min(10, Math.max(1, playerCount - 1));
   state.players = enteredBatters;
@@ -1123,6 +1208,7 @@ function bowlerFig(b){
 }
 function render(){
   ensureObjects();
+  if(typeof ensureWeekendFields === 'function') ensureWeekendFields();
   if(typeof ensureInningsFields === "function") ensureInningsFields();
   document.getElementById("scoreBig").textContent = `${state.score}/${state.wickets}`;
   document.getElementById("oversBig").textContent = `${oversText(state.legalBalls)} overs`;
@@ -1141,7 +1227,7 @@ function render(){
   document.getElementById("batPair").innerHTML = `<strong>${state.striker}</strong> ${s.runs}* (${s.balls}) &nbsp; | &nbsp; ${state.nonStriker} ${ns.runs}* (${ns.balls})`;
   document.getElementById("bowlerLine").textContent = `${state.bowler} ${bowlerFig(state.bowler)}`;
   document.getElementById("extrasLine").textContent = `${totalExtras()} (Wd ${state.extras.wides}, NB ${state.extras.noballs}, B ${state.extras.byes}, LB ${state.extras.legbyes})`;
-  renderThisOver(); renderTables(); renderLog(); renderTally(); renderSelects(); renderScorebook(); calculateDls(); if(typeof renderInningsInfo === "function") renderInningsInfo();
+  renderThisOver(); renderTables(); renderLog(); renderTally(); renderSelects(); renderScorebook(); calculateDls(); if(typeof renderInningsInfo === "function") renderInningsInfo(); if(typeof weekendRenderExtras === 'function') weekendRenderExtras();
   document.getElementById("teamName").value = state.team;
   document.getElementById("maxOvers").value = state.maxOvers;
   document.getElementById("playerCount").value = state.players.length;
@@ -1196,7 +1282,7 @@ function renderTables(){
       const x=state.bat[p]; const mark = p===state.striker ? " *" : "";
       const rate = batterRateText(x.runs, x.balls);
       const rateCls = batterRateClass(x.runs, x.balls);
-      return `<tr class="${p===state.striker?'current':''}"><td>${escapeHtml(p)}${mark}</td><td>${x.runs}</td><td>${x.balls}</td><td class="${rateCls}">${rate}</td><td>${x.fours}</td><td>${x.sixes}</td><td>${x.out?escapeHtml(x.dismissal):(x.balls||isInPlay(p)?"not out":"")}</td></tr>`;
+      return `<tr class="${p===state.striker?'current':''}"><td>${escapeHtml(p)}${mark}${x.retired ? '<span class="retired-badge">Retired</span>' : ""}</td><td>${x.runs}</td><td>${x.balls}</td><td class="${rateCls}">${rate}</td><td>${x.fours}</td><td>${x.sixes}</td><td>${x.out?escapeHtml(x.dismissal):(x.balls||isInPlay(p)?"not out":"")}</td></tr>`;
     }).join("");
   document.getElementById("bowlTable").innerHTML = `<tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th>RPO</th><th>RPW</th><th>Wd</th><th>NB</th></tr>` +
     state.bowlers.map(b=>{
@@ -1698,6 +1784,7 @@ function openEditBall(index){
   document.getElementById("editBallPromptText").textContent =
     `Editing ball ${e.over}: ${e.bowler} to ${e.striker}.`;
 
+  if(typeof populateEditBowlerDropdown === "function") populateEditBowlerDropdown(e.bowler);
   document.getElementById("editBallType").value = e.type || (e.extraType || "run");
   document.getElementById("editBallRuns").value = Number(e.runs || 0);
   document.getElementById("editBallBatRuns").value = Number(e.batRuns || 0);
@@ -1764,8 +1851,14 @@ function saveEditedBall(){
     extraRuns = runs;
   }
 
+  const editedBowler = document.getElementById("editBallBowler") ? document.getElementById("editBallBowler").value : old.bowler;
+  const applyScope = document.getElementById("editBowlerApplyScope") ? document.getElementById("editBowlerApplyScope").value : "ball";
+  if(editedBowler && !state.bowlers.includes(editedBowler)) state.bowlers.push(editedBowler);
+  const editedOverPrefix = String(old.over || "").split(".")[0];
+
   state.log[editBallIndex] = {
     ...old,
+    bowler: editedBowler || old.bowler,
     type,
     runs,
     batRuns,
@@ -1776,6 +1869,14 @@ function saveEditedBall(){
     score: 0,
     wickets: 0
   };
+
+  if(applyScope === "over"){
+    (state.log || []).forEach(e => {
+      if(String(e.over || "").split(".")[0] === editedOverPrefix){
+        e.bowler = editedBowler || old.bowler;
+      }
+    });
+  }
 
   recalculateFromBallLog();
   closeEditBallPrompt();
@@ -1901,6 +2002,8 @@ function recalculateFromBallLog(){
       state.legalBalls += 1;
       bowler.balls += 1;
     }
+
+    if(e.fieldingCredit && e.fielder && typeof addFielderStat === 'function') addFielderStat(e.fielder, e.fieldingCredit);
 
     if(e.wicket){
       state.wickets += 1;
@@ -2219,13 +2322,17 @@ function startSecondInnings(){
   state.firstInnings = first;
   state.target = first.score + 1;
   state.inningsNumber = 2;
+  const oldBattingTeam = state.battingTeam || state.team || 'Batting XI';
+  const oldFieldingTeam = state.fieldingTeam || 'Fielding XI';
   resetScoringForNewInnings();
+  state.battingTeam = oldFieldingTeam;
+  state.fieldingTeam = oldBattingTeam;
 
   // Keep the first innings and target after reset
   state.firstInnings = first;
   state.target = first.score + 1;
   state.inningsNumber = 2;
-  state.team = "Chasing team";
+  state.team = state.battingTeam || "Chasing team";
 
   saveNow();
   render();
@@ -2255,6 +2362,195 @@ function clearTargetOnly(){
   saveNow();
   render();
 }
+
+function ensureWeekendFields(){
+  if(!state.battingTeam) state.battingTeam = state.team || "Practice XI";
+  if(!state.fieldingTeam) state.fieldingTeam = state.fieldingTeam || "Fielding XI";
+  if(!state.fielders) state.fielders = [];
+  if(!state.fieldingStats) state.fieldingStats = {};
+  if(!state.retiredPlayers) state.retiredPlayers = [];
+  if(state.maxWickets == null) state.maxWickets = 10;
+}
+function allFielders(){
+  ensureWeekendFields();
+  const names = [];
+  function add(x){ if(x && !names.includes(x)) names.push(x); }
+  (state.fielders || []).forEach(add);
+  (state.bowlers || []).forEach(add);
+  (state.log || []).forEach(e => { if(e.fielder) add(e.fielder); });
+  return names;
+}
+function isPlayerRetired(name){
+  return !!(state.bat && state.bat[name] && state.bat[name].retired);
+}
+function markRetiredPlayer(name){
+  ensureWeekendFields();
+  if(!state.retiredPlayers.includes(name)) state.retiredPlayers.push(name);
+  if(state.bat && state.bat[name]){
+    state.bat[name].retired = true;
+    state.bat[name].dismissal = "retired 50";
+  }
+}
+function restoreRetiredPlayer(name){
+  if(state.bat && state.bat[name]){
+    state.bat[name].retired = false;
+    if(state.bat[name].dismissal === "retired 50") state.bat[name].dismissal = "";
+  }
+}
+function addFielderStat(name, field){
+  if(!name) return;
+  ensureWeekendFields();
+  if(!state.fieldingStats[name]) state.fieldingStats[name] = {catches:0, runouts:0, stumpings:0};
+  state.fieldingStats[name][field] = (state.fieldingStats[name][field] || 0) + 1;
+}
+function buildBowlerBallsMatrix(){
+  const matrix = {};
+  const batters = [];
+  const bowlers = [];
+  function add(arr, x){ if(x && !arr.includes(x)) arr.push(x); }
+  (state.log || []).forEach(e => {
+    const legal = !(e.type === "wide" || e.type === "noball");
+    add(batters, e.striker);
+    add(bowlers, e.bowler);
+    if(legal){
+      if(!matrix[e.striker]) matrix[e.striker] = {};
+      matrix[e.striker][e.bowler] = (matrix[e.striker][e.bowler] || 0) + 1;
+    }
+  });
+  return {matrix, batters, bowlers};
+}
+function renderBowlerBallsMatrix(){
+  const table = document.getElementById("bowlerBallsMatrix");
+  if(!table) return;
+  const {matrix, batters, bowlers} = buildBowlerBallsMatrix();
+  if(!batters.length || !bowlers.length){
+    table.innerHTML = "<tr><td>No balls recorded yet.</td></tr>";
+    return;
+  }
+  table.innerHTML = `<tr><th>Batter</th>${bowlers.map(b=>`<th>${escapeHtml(b)}</th>`).join("")}<th>Total</th></tr>` +
+    batters.map(bt => {
+      let total = 0;
+      const cells = bowlers.map(bw => {
+        const v = (matrix[bt] && matrix[bt][bw]) || 0;
+        total += v;
+        return `<td>${v || ""}</td>`;
+      }).join("");
+      return `<tr><td>${escapeHtml(bt)}</td>${cells}<td><strong>${total}</strong></td></tr>`;
+    }).join("");
+}
+function renderFieldingStats(){
+  const table = document.getElementById("fieldingStatsTable");
+  if(!table) return;
+  ensureWeekendFields();
+  const names = Object.keys(state.fieldingStats || {});
+  if(!names.length){
+    table.innerHTML = "<tr><td>No catches/run-outs recorded yet.</td></tr>";
+    return;
+  }
+  table.innerHTML = `<tr><th>Fielder</th><th>Catches</th><th>Run outs</th><th>Stumpings</th></tr>` +
+    names.map(n => {
+      const s = state.fieldingStats[n] || {};
+      return `<tr><td>${escapeHtml(n)}</td><td>${s.catches || 0}</td><td>${s.runouts || 0}</td><td>${s.stumpings || 0}</td></tr>`;
+    }).join("");
+}
+function renderTeamSheetEditors(){
+  const batBox = document.getElementById("battingTeamSheetEditor");
+  const fieldBox = document.getElementById("fieldingTeamSheetEditor");
+  if(!batBox || !fieldBox) return;
+  ensureWeekendFields();
+  batBox.innerHTML = (state.players || []).map((p,i)=>`
+    <div class="player-edit-row">
+      <div class="field"><label>Batter ${i+1}</label><input class="team-edit-batter" data-old="${escapeAttr(p)}" value="${escapeAttr(p)}"></div>
+      <span>${isPlayerRetired(p) ? '<span class="retired-badge">Retired</span>' : ""}</span>
+    </div>`).join("");
+  const fielders = allFielders();
+  fieldBox.innerHTML = fielders.map((p,i)=>`
+    <div class="player-edit-row">
+      <div class="field"><label>Fielder/Bowler ${i+1}</label><input class="team-edit-fielder" data-old="${escapeAttr(p)}" value="${escapeAttr(p)}"></div>
+      <span></span>
+    </div>`).join("") || "<p class='muted'>No fielding players yet.  Bowlers will appear here as they are added.</p>";
+}
+function renameEverywhere(oldName, newName){
+  if(!oldName || !newName || oldName === newName) return;
+  function ren(x){ return x === oldName ? newName : x; }
+  state.players = (state.players || []).map(ren);
+  state.bowlers = (state.bowlers || []).map(ren);
+  state.fielders = (state.fielders || []).map(ren);
+  state.retiredPlayers = (state.retiredPlayers || []).map(ren);
+  if(state.striker === oldName) state.striker = newName;
+  if(state.nonStriker === oldName) state.nonStriker = newName;
+  if(state.bowler === oldName) state.bowler = newName;
+  if(state.bat && state.bat[oldName]){
+    state.bat[newName] = state.bat[oldName];
+    delete state.bat[oldName];
+  }
+  if(state.bowl && state.bowl[oldName]){
+    state.bowl[newName] = state.bowl[oldName];
+    delete state.bowl[oldName];
+  }
+  if(state.fieldingStats && state.fieldingStats[oldName]){
+    state.fieldingStats[newName] = state.fieldingStats[oldName];
+    delete state.fieldingStats[oldName];
+  }
+  (state.log || []).forEach(e => {
+    e.striker = ren(e.striker);
+    e.nonStriker = ren(e.nonStriker);
+    e.bowler = ren(e.bowler);
+    e.fielder = ren(e.fielder);
+    if(e.dismissal) e.dismissal = e.dismissal.split(oldName).join(newName);
+  });
+}
+function applyTeamSheetEdits(){
+  document.querySelectorAll(".team-edit-batter,.team-edit-fielder").forEach(input => {
+    const oldName = input.dataset.old;
+    const newName = String(input.value || "").trim();
+    if(newName) renameEverywhere(oldName, newName);
+  });
+  saveNow();
+  render();
+  alert("Name corrections applied.");
+}
+function populateCatcherDropdown(){
+  const select = document.getElementById("catcherSelect");
+  if(!select) return;
+  const names = allFielders();
+  select.innerHTML = `<option value="">Select catcher...</option>` + names.map(n=>`<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join("");
+}
+function populateEditBowlerDropdown(selected){
+  const sel = document.getElementById("editBallBowler");
+  if(!sel) return;
+  const names = allFielders();
+  if(selected && !names.includes(selected)) names.unshift(selected);
+  sel.innerHTML = names.map(n=>`<option value="${escapeAttr(n)}" ${n===selected?"selected":""}>${escapeHtml(n)}</option>`).join("");
+}
+function retireCurrentBatter(){
+  const typedIncoming = String((document.getElementById("incomingBatterName") || {}).value || "").trim();
+  const selectedIncoming = document.getElementById("newBatter") ? document.getElementById("newBatter").value : "";
+  const incoming = typedIncoming || selectedIncoming;
+  if(!incoming){
+    alert("Please type or choose the incoming batter.");
+    const box = document.getElementById("incomingBatterName");
+    if(box) box.focus();
+    return;
+  }
+  const retiring = state.striker;
+  markRetiredPlayer(retiring);
+  const nb = typeof ensureIncomingBatterExists === "function" ? ensureIncomingBatterExists(incoming, incoming) : incoming;
+  restoreRetiredPlayer(nb);
+  state.striker = nb;
+  closePopups();
+  saveNow();
+  render();
+}
+function weekendRenderExtras(){
+  ensureWeekendFields();
+  const ft = document.getElementById("fieldingTeamName");
+  if(ft) ft.value = state.fieldingTeam || "Fielding XI";
+  renderBowlerBallsMatrix();
+  renderFieldingStats();
+  renderTeamSheetEditors();
+}
+
 function exportCSV(){
   const rows = [["No","Ball","Bowler","Striker","Non-striker","Type","Bat runs","Extra type","Extra runs","Wicket","Dismissal","Score","Wickets"]];
   state.log.forEach((e,i)=>rows.push([i+1,e.over,e.bowler,e.striker,e.nonStriker,e.type,e.batRuns,e.extraType,e.extraRuns,e.wicket,e.dismissal,e.score,e.wickets]));
