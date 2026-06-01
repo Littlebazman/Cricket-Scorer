@@ -138,6 +138,9 @@
   .retired-badge{display:inline-block;border-radius:999px;background:#fef3c7;color:#92400e;font-weight:900;font-size:11px;padding:2px 6px;margin-left:4px}
   @media(max-width:900px){.team-sheet-grid{grid-template-columns:1fr}.player-edit-row{grid-template-columns:1fr}}
 
+
+  .modal-close-x{position:absolute;top:10px;right:12px;border:0;background:#fee2e2;color:#991b1b;border-radius:999px;width:34px;height:34px;font-size:22px;font-weight:900;line-height:1;cursor:pointer}
+  .modal{position:relative}
 </style>
 
 <meta name="theme-color" content="#111827" />
@@ -152,7 +155,7 @@
 <body>
 <header>
   <div class="topbar">
-    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.14</span></h1>
+    <h1>Martin's Cricket Scorer <span style='font-size:12px;color:#bbf7d0'>v1.15</span></h1>
     <div class="autosave" id="autosave">Autosave ready</div>
   </div>
 </header>
@@ -1374,6 +1377,37 @@ function realFieldingNamesForDropdown(){
   return real.length ? real : unique;
 }
 
+
+function setupFieldingNamesOnly(){
+  const typed = Array.from(document.querySelectorAll(".bowler-name"))
+    .map(x => String(x.value || "").trim())
+    .filter(Boolean);
+
+  // Prefer the names typed in the Player Names section because that is now the source of truth.
+  const unique = [];
+  typed.forEach(n => { if(n && !unique.includes(n) && !/^Fielder \d+$/i.test(n) && !/^Bowler \d+$/i.test(n)) unique.push(n); });
+
+  if(unique.length) return unique;
+
+  // Fallback to state.fielders, but remove placeholders if any real names exist.
+  const stateNames = (state.fielders || state.bowlers || []).filter(Boolean);
+  const real = [];
+  stateNames.forEach(n => { if(n && !real.includes(n) && !/^Fielder \d+$/i.test(n) && !/^Bowler \d+$/i.test(n)) real.push(n); });
+  return real.length ? real : stateNames.filter(n => n && !/^Bowler \d+$/i.test(n));
+}
+function setupBattingNamesOnly(){
+  const typed = Array.from(document.querySelectorAll(".batter-name"))
+    .map(x => String(x.value || "").trim())
+    .filter(Boolean);
+
+  const unique = [];
+  typed.forEach(n => { if(n && !unique.includes(n)) unique.push(n); });
+
+  if(unique.length) return unique;
+
+  return (state.players || []).filter(Boolean);
+}
+
 function populateStartInningsDropdowns(){
   if(typeof ensureWeekendFields === "function") ensureWeekendFields();
 
@@ -1381,17 +1415,19 @@ function populateStartInningsDropdowns(){
   const nonStrikerSel = document.getElementById("startNonStrikerSelect");
   const bowlerSel = document.getElementById("startBowlerSelect");
 
-  const batters = (state.players || []).filter(Boolean);
-  const fielders = (typeof realFieldingNamesForDropdown === "function" ? realFieldingNamesForDropdown() : (typeof allFielders === "function" ? allFielders() : (state.fielders || state.bowlers || []))).filter(Boolean);
+  const batters = (typeof setupBattingNamesOnly === "function" ? setupBattingNamesOnly() : (state.players || [])).filter(Boolean);
+  const fielders = (typeof setupFieldingNamesOnly === "function" ? setupFieldingNamesOnly() : (state.fielders || state.bowlers || [])).filter(Boolean);
 
   function fill(select, names, selected){
     if(!select) return;
-    select.innerHTML = names.map(n => `<option value="${escapeAttr(n)}" ${n===selected?"selected":""}>${escapeHtml(n)}</option>`).join("");
+    const clean = [];
+    names.forEach(n => { if(n && !clean.includes(n)) clean.push(n); });
+    select.innerHTML = clean.map(n => `<option value="${escapeAttr(n)}" ${n===selected?"selected":""}>${escapeHtml(n)}</option>`).join("");
   }
 
   fill(strikerSel, batters, state.striker || batters[0]);
   fill(nonStrikerSel, batters, state.nonStriker || batters[1] || batters[0]);
-  fill(bowlerSel, fielders.length ? fielders : (state.bowlers || []), state.bowler || (fielders[0] || (state.bowlers || [])[0]));
+  fill(bowlerSel, fielders, state.bowler || fielders[0]);
 }
 function showStartPrompt(){
   if(state.startPromptDone || state.log.length > 0) return;
@@ -1470,17 +1506,14 @@ function ensureBatterExists(name, fallback){
   return finalName;
 }
 function startInningsFromPrompt(){
+  // Sync the currently typed player names into state, without resetting the innings.
   if(typeof updateNamesFromPlayerSection === "function"){
-    // Pull in any latest names from Setup's Player Names section before starting.
-    // Do this silently rather than alerting.
     try {
-      const oldAlert = window.alert;
+      const originalAlert = window.alert;
       window.alert = function(){};
       updateNamesFromPlayerSection();
-      window.alert = oldAlert;
-    } catch(e) {
-      window.alert = window.alert;
-    }
+      window.alert = originalAlert;
+    } catch(e) {}
   }
 
   populateStartInningsDropdowns();
